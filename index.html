@@ -178,7 +178,7 @@
       box-shadow: 0 0 12px rgba(56,161,105,0.25);
     }
 
-    .tile.fresh { animation: popIn 0.35s cubic-bezier(0.22, 1, 0.36, 1); }
+    .tile.fresh { animation: popIn 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
     @keyframes popIn {
       from { transform: scale(0.4); opacity: 0.3; }
       to   { transform: scale(1);   opacity: 1; }
@@ -241,6 +241,14 @@
     .btn-back:active { background: var(--panel); }
     .btn-back[aria-disabled="true"] { color: var(--muted); opacity: 0.45; cursor: default; }
     .btn-back[aria-disabled="true"]:active { background: var(--surface); }
+    /* Shuffle mode: no letters selected, so the button reshuffles the grid instead of
+       backspacing. Fully active (not greyed out) with its own icon, distinguished from the
+       backspace look by an accent border/colour rather than the muted disabled styling above. */
+    .btn-back.shuffle-mode { color: var(--teal); border-color: var(--teal); opacity: 1; cursor: pointer; }
+    .btn-back.shuffle-mode:active { background: rgba(8,145,178,0.12); }
+    .btn-back .icon-backspace, .btn-back .icon-shuffle { display: none; }
+    .btn-back:not(.shuffle-mode) .icon-backspace { display: block; }
+    .btn-back.shuffle-mode .icon-shuffle { display: block; }
     .btn-finish {
       width: calc(var(--tile-size) * 5 + var(--gap) * 4 + 20px);
       background: var(--surface);
@@ -396,11 +404,17 @@
 
 <div class="word-row">
   <div class="word-wrap" id="word-wrap"><div class="word-text" id="word-text"></div></div>
-  <button class="btn-back" id="btn-back" type="button" aria-disabled="true"
-          aria-label="Backspace. Tap to delete the last letter, press and hold to clear the word.">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"
+  <button class="btn-back shuffle-mode" id="btn-back" type="button" aria-disabled="false"
+          aria-label="Shuffle the grid. Tap or press and hold to shuffle.">
+    <svg class="icon-backspace" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"
          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <line x1="20" y1="12" x2="4" y2="12"/><polyline points="11 5 4 12 11 19"/>
+    </svg>
+    <svg class="icon-shuffle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"
+         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/>
+      <polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/>
+      <line x1="4" y1="4" x2="9" y2="9"/>
     </svg>
   </button>
 </div>
@@ -593,6 +607,26 @@
       [ls[i], ls[j]] = [ls[j], ls[i]];
     }
     empty.forEach((cell, n) => { state.board[cell] = ls[n]; });
+  }
+
+  // Shuffles the letters already on the board into new positions, in place. Used by the
+  // backspace button's "shuffle mode" (active only when nothing is selected), never touches the
+  // bank or draws new letters -- it is purely a rearrangement of what is already showing.
+  //
+  // Returns `from`, an array where from[newIndex] = oldIndex: i.e. the tile now sitting at
+  // newIndex used to sit at from[newIndex] before the shuffle. This is tracked by shuffling a
+  // parallel array of original positions using the exact same swaps as the letters, so it
+  // reflects the real permutation applied (not just "a" permutation that happens to produce the
+  // same letters) -- callers can use it to animate each tile from its old screen position to its
+  // new one. Letter-shuffling behaviour and the sequence of rng() calls are unchanged.
+  function shuffleBoard(state, rng = Math.random) {
+    const from = state.board.map((_, i) => i);
+    for (let i = state.board.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [state.board[i], state.board[j]] = [state.board[j], state.board[i]];
+      [from[i], from[j]] = [from[j], from[i]];
+    }
+    return from;
   }
 
   // ── New game ─────────────────────────────────────────────────────────────────
@@ -852,7 +886,15 @@
     freshCells = new Set();
 
     document.getElementById('btn-confirm').disabled = !valid;
-    document.getElementById('btn-back').setAttribute('aria-disabled', hasSel ? 'false' : 'true');
+    // No letters selected -> shuffle mode: the button is fully active, just doing a different
+    // job, so aria-disabled is always "false" here (unlike the true backspace case, which greys
+    // out once the word is empty -- there's no "empty" state for shuffle to disable on).
+    const backBtn = document.getElementById('btn-back');
+    backBtn.classList.toggle('shuffle-mode', !hasSel);
+    backBtn.setAttribute('aria-disabled', 'false');
+    backBtn.setAttribute('aria-label', hasSel
+      ? 'Backspace. Tap to delete the last letter, press and hold to clear the word.'
+      : 'Shuffle the grid. Tap or press and hold to shuffle.');
 
     const hintBtn = document.getElementById('btn-hint');
     hintBtn.textContent = state.hintWord ? ('Hint = ' + hintRevealText(state.hintWord)) : 'Hint';
@@ -878,8 +920,67 @@
   // These are the ONLY ways to take letters back out of the word.
   const HOLD_MS = 700;   // how long to hold before the whole word is cleared
 
+  // Shuffles the board and animates each tile from its old screen position to its new one.
+  // Use the Web Animations API rather than a CSS transition here. Android WebView can batch
+  // the style changes used by a traditional FLIP transition, causing the transform to jump
+  // straight to its final position. element.animate() explicitly creates the animation and
+  // avoids that timing problem.
+  function performShuffle() {
+    const boardEl = document.getElementById('board');
+    const oldRects = Array.from(boardEl.children).map(cell => cell.getBoundingClientRect());
+
+    const from = shuffleBoard(state);
+    saveGameState();
+    render();
+
+    const newTiles = boardEl.querySelectorAll('.cell > .tile');
+    newTiles.forEach(function (tile, newIndex) {
+      const oldIndex = from[newIndex];
+      const oldRect = oldRects[oldIndex];
+      const newRect = tile.getBoundingClientRect();
+      const dx = oldRect.left - newRect.left;
+      const dy = oldRect.top - newRect.top;
+      if (dx === 0 && dy === 0) return;
+
+      // The tile is already in its new DOM position. Animate it visually from the old
+      // position to the new one. Fill='none' leaves the tile at its normal final position
+      // when the animation completes.
+      if (typeof tile.animate === 'function') {
+        tile.animate(
+          [
+            { transform: 'translate(' + dx + 'px, ' + dy + 'px)' },
+            { transform: 'translate(0, 0)' }
+          ],
+          {
+            duration: 700,
+            easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+            fill: 'none'
+          }
+        );
+      } else {
+        // Fallback for very old WebViews: use a CSS transition with two animation frames.
+        tile.style.transition = 'none';
+        tile.style.transform = 'translate(' + dx + 'px, ' + dy + 'px)';
+        requestAnimationFrame(function () {
+          requestAnimationFrame(function () {
+            tile.style.transition = 'transform 0.32s cubic-bezier(0.22, 1, 0.36, 1)';
+            tile.style.transform = '';
+            setTimeout(function () {
+              tile.style.transition = '';
+            }, 340);
+          });
+        });
+      }
+    });
+  }
+
   function onBackspaceTap() {
     if (state.gameOver) return;
+    if (state.selection.length === 0) {
+      // Shuffle mode: nothing to backspace, so the button reshuffles the grid instead.
+      performShuffle();
+      return;
+    }
     if (!backspace(state)) return;
     saveGameState();
     render();
@@ -887,6 +988,11 @@
 
   function onBackspaceHold() {
     if (state.gameOver) return;
+    if (state.selection.length === 0) {
+      // Shuffle mode: a long press does the same thing as a tap -- there is no "clear" to do.
+      performShuffle();
+      return;
+    }
     if (!clearSelection(state)) return;
     saveGameState();
     render();
