@@ -471,7 +471,9 @@
   const CELLS = 25;
   const MIN_SUBMIT_FLOOR = 4;    // shortest word any level ever accepts (level 1)
   const MIN_SUBMIT_CEIL = 10;    // highest minimum a level can demand (matches the 10-letter seed ceiling)
+  const MAX_WORD_LENGTH = CELLS;
   const WORDS_PER_LEVEL = 20;
+  const MAX_HINT_LENGTH = 4;
 
   // ── Letter values (standard Scrabble) ────────────────────────────────────────
   const LETTER_VALUES = {
@@ -491,23 +493,24 @@
   }
 
   // ── Levels ───────────────────────────────────────────────────────────────────
-  // Level 1: 4-6, 2: 4-7, 3: 4-8, 4: 4-9, 5: 4-10, then the minimum rises: 6: 5-10,
-  // 7: 6-10, 8: 7-10, 9: 8-10, 10: 9-10, 11+: 10-10 forever.
   function levelFor(words) {
+    // return 8; // Uncomment this to test a specific level.
     return Math.floor(words / WORDS_PER_LEVEL) + 1;
   }
 
   // The shortest word the player may submit, for a given level. Rises by one letter per
-  // level starting at 4 (level 1), capped at 10 to match the seed-length ceiling: beyond
-  // level 7 only a full 10-letter word is accepted, however short the seeded words get.
+  // level starting at 4 (level 1)
   function minSubmitFor(level) {
-    return Math.min(MIN_SUBMIT_CEIL, MIN_SUBMIT_FLOOR - 1 + level);
+    return MIN_SUBMIT_FLOOR - 1 + level;
   }
 
+  // Range of lengths for seed words.
+  // Level 1: 4-6, 2: 4-7, 3: 4-8, 4: 4-9, 5: 4-10, then the minimum rises:
+  // 6: 5-10, 7: 6-11, 8: 7-12, 9: 8-13...
   function lengthRange(level) {
     if (level <= 5) return { min: 4, max: 5 + level };      // 1->6 ... 5->10
-    const min = Math.min(10, 4 + (level - 5));              // 6->5 ... 10->9, 11+->10
-    return { min, max: 10 };
+    const min = Math.min(MAX_WORD_LENGTH, 4 + (level - 5)); // 6->5 ... 10->9, 11+->10
+    return { min, max: level + 5 };
   }
 
   // ── Dictionaries ─────────────────────────────────────────────────────────────
@@ -548,6 +551,7 @@
     for (let n = min; n <= max; n++) {
       const list = seedDict.byLength[n] || [];
       if (k < list.length) {
+        // console.log('Seed = ' + list[k]);
         return list[k];
       }
       k -= list.length;
@@ -685,7 +689,7 @@
   function anyWordFindable(board, seedDict, minLen) {
     const boardCounts = {};
     for (const ch of board) boardCounts[ch] = (boardCounts[ch] || 0) + 1;
-    for (let len = minLen; len <= 10; len++) {
+    for (let len = minLen; len <= MAX_WORD_LENGTH; len++) {
       const words = seedDict.byLength[len];
       if (!words) continue;
       for (let i = 0; i < words.length; i++) {
@@ -703,26 +707,29 @@
   // board, seedDict, minLen) would report as false. Deterministic: the first match in seedDict's
   // (alphabetical) order at the shortest workable length, so the same board+level always offers
   // the same hint.
-  function findHintWord(board, seedDict, minLen) {
+  function findHintWord(board, seedDict, minLen, excludeWord = null, rng = Math.random) {
     const boardCounts = {};
     for (const ch of board) boardCounts[ch] = (boardCounts[ch] || 0) + 1;
-    for (let len = minLen; len <= 10; len++) {
+    for (let len = minLen; len <= MAX_WORD_LENGTH; len++) {
       const words = seedDict.byLength[len];
       if (!words) continue;
-      for (let i = 0; i < words.length; i++) {
-        if (canMakeWord(words[i], boardCounts)) return words[i];
+      // Pick a random word, so we get variety in hints.
+      const start = Math.floor(rng() * words.length);
+      for (let k = 0; k < words.length; k++) {
+        const w = words[(start + k) % words.length];
+        if (w === excludeWord) continue;
+        if (canMakeWord(w, boardCounts)) return w;
       }
     }
     return null;
   }
 
-  // Given a hint word, returns the board indices to highlight: enough tiles to spell the first
-  // half of the word (floor(length / 2) letters -- a 5-letter word shows 2, a 4-letter word shows
-  // 2), taken from the board greedily by scanning the board once per needed letter. Each board
+  // Given a hint word, returns the board indices to highlight: enough tiles to spell up to the first 4 letters,
+  // taken from the board greedily by scanning the board once per needed letter. Each board
   // index is used for at most one letter of the hint, so it never claims the same tile twice even
   // if the word repeats a letter the board also happens to repeat.
   function hintTiles(board, word) {
-    const halfLen = Math.floor(word.length / 2);
+    const halfLen = Math.min(4, Math.floor(word.length / 2));
     const used = new Set();
     const indices = [];
     for (let i = 0; i < halfLen; i++) {
@@ -810,7 +817,11 @@
     wrap.classList.toggle('building', hasSel && !valid);
     if (hasSel) {
       text.className = 'word-text';
-      fitInto(text, wrap, selectedWord(state), wordFontBase);
+      const minLen = minSubmitFor(levelFor(state.words));
+      const word = selectedWord(state);
+      const blanksNeeded = Math.max(0, minLen - word.length);
+      const display = blanksNeeded > 0 ? word + Array(blanksNeeded).fill('_').join('') : word; // .join(' ')
+      fitInto(text, wrap, display, wordFontBase);
     } else {
       text.className = 'word-text word-placeholder';
       const minLen = minSubmitFor(levelFor(state.words));
@@ -850,7 +861,7 @@
   // The portion of the hint word shown on the button and highlighted on the board: the first
   // floor(length / 2) letters (a 5-letter word reveals 2, matching hintTiles()).
   function hintRevealText(word) {
-    return word.slice(0, Math.floor(word.length / 2));
+    return word.slice(0, Math.min(MAX_HINT_LENGTH, Math.floor(word.length / 2)));
   }
 
   // ═══ Interactions ═══
@@ -1021,10 +1032,15 @@
   // test/logic.js into this file can never silently remove it again.
   const HINT_COST = 50;
 
-  // Pressing Hint while a hint is already active (state.hintWord set) is free: it just
-  // re-displays the same word's tiles as the current selection, discarding whatever the player
-  // had tapped since. Pressing it when no hint is active finds a word, asks to spend 50 points,
-  // and only reveals it (and charges) if the player confirms.
+  // Pressing Hint always asks first via the confirm dialog, whether or not a hint is already
+  // active:
+  //   - No existing hint: Yes finds a word and charges 50 points; No does nothing (as before).
+  //   - A hint IS already active: Yes finds a DIFFERENT word (never the one currently shown) and
+  //     charges another 50 points; No just re-displays the current hint's tiles for free,
+  //     discarding whatever the player had tapped since -- the previous "press again" behaviour,
+  //     now reached via No instead of happening immediately on tap.
+  // isRefreshingHint (set when the dialog opens, read when it resolves) is what tells Yes/No
+  // which of these two situations they are resolving.
   //
   // The same arming-delay trick as the level-up dialog is used for the two new dialogs below,
   // since they are also opened by a tap (on Hint) that could deliver a delayed synthetic click.
@@ -1033,30 +1049,35 @@
   let hintConfirmShownAt = 0;
   let nohintShownAt = 0;
   let pendingHintWord = null;   // the word found while the confirm dialog is open, not yet paid for
+  let isRefreshingHint = false; // true if this confirm dialog is for a SECOND hint, replacing an active one
 
   function onHint() {
     if (state.gameOver) return;
 
-    if (state.hintWord) {
-      // Re-show the existing hint for free. If the word it found is no longer actually on the
-      // board (should not happen in normal play, but a corrupted/edited save is possible), fall
-      // through and look for a fresh one instead of highlighting tiles that no longer make sense.
+    isRefreshingHint = !!state.hintWord;
+    if (isRefreshingHint) {
+      // Defensive: if the active hint's word is no longer actually on the board (should not
+      // happen in normal play -- nothing changes the board while this hint is active except a
+      // submit, which clears the hint -- but a corrupted or hand-edited save is possible), treat
+      // this as a fresh request rather than risk a No that re-selects tiles that no longer spell
+      // anything sensible.
       const boardCounts = {};
       for (const ch of state.board) boardCounts[ch] = (boardCounts[ch] || 0) + 1;
-      if (canMakeWord(state.hintWord, boardCounts)) {
-        state.selection = state.hintTiles.slice();
-        saveGameState();
-        render();
-        return;
+      if (!canMakeWord(state.hintWord, boardCounts)) {
+        state.hintWord = null;
+        state.hintTiles = null;
+        isRefreshingHint = false;
       }
-      state.hintWord = null;
-      state.hintTiles = null;
     }
 
     const minLen = minSubmitFor(levelFor(state.words));
-    const word = findHintWord(state.board, seedDict, minLen);
-    console.log('Hint: ' + word);
+    // When refreshing, the word currently on display must never be offered again as the "new"
+    // hint -- that would not be a different hint at all.
+    const word = findHintWord(state.board, seedDict, minLen, isRefreshingHint ? state.hintWord : null);
+    // console.log('hint word:', word);
     if (!word) {
+      // No (different) word exists. If a hint was already showing, leave it exactly as it is --
+      // the dialog is purely informational here, there is nothing to confirm or decline.
       showNoHint();
       return;
     }
@@ -1071,8 +1092,15 @@
 
   function cancelHintConfirm() {
     if (Date.now() - hintConfirmShownAt < HINTCONFIRM_ARM_MS) return;
-    pendingHintWord = null;
     document.getElementById('hintconfirm').classList.add('hidden');
+    if (isRefreshingHint) {
+      // No: keep the existing hint, just re-show its tiles for free (the old "press again"
+      // behaviour), discarding whatever the player had tapped since.
+      state.selection = state.hintTiles.slice();
+      saveGameState();
+      render();
+    }
+    pendingHintWord = null;
   }
 
   function acceptHintConfirm() {
@@ -1138,13 +1166,13 @@
   // never let a leftover tap fall through onto a tile underneath.
   document.getElementById('btn-levelup').addEventListener('click', dismissLevelUp);
   fastTap(document.getElementById('btn-new-game-hud'), function () {
-    if (state && confirm('Start a new game? Current progress will be lost.')) startNewGame();
+    if (state && confirm('Start a new game?')) startNewGame();
   });
 
   // ═══ Layout (same approach as SumStack: size everything from the viewport width) ═══
   function applyLayout() {
     const vw = window.innerWidth, vh = window.innerHeight;
-    const gap = Math.max(4, Math.min(12, Math.round(vw * 0.012)));
+    const gap = Math.max(MAX_HINT_LENGTH, Math.min(12, Math.round(vw * 0.012)));
 
     // Fixed vertical furniture, in units of tileSize: title + HUD + word bar + action row +
     // finish button + paddings. Solve for the largest tile that fits BOTH the width and the
