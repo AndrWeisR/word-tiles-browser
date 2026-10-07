@@ -33,6 +33,11 @@
 
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 
+    /* For Nanna:
+      font-family: sans-serif-smallcaps, monospace;
+      font-weight: 700;
+    */
+
     body {
       background: var(--bg);
       color: var(--text);
@@ -340,7 +345,7 @@
       box-shadow: 0 8px 32px rgba(0,0,0,0.25);
     }
     .hintconfirm-title { font-family: 'Fraunces', serif; font-size: calc(var(--font-btn) * 1.5); font-weight: 700; color: var(--gold); }
-    .hintconfirm-msg { font-size: calc(var(--font-btn) * 1.2); line-height: 1.4; color: var(--text); overflow-wrap: anywhere; }
+    .hintconfirm-msg { font-size: calc(var(--font-btn) * 1.2); line-height: 1.4; color: var(--text); overflow-wrap: anywhere; white-space: pre-line; }
     .hintconfirm-buttons { display: flex; gap: var(--gap); width: 100%; margin-top: 4px; }
     .btn-hintconfirm-yes, .btn-hintconfirm-no { flex: 1; letter-spacing: 2px; }
     .btn-hintconfirm-yes { background: var(--gold); color: #fff; }
@@ -453,7 +458,7 @@
 <div class="nohint-overlay hidden" id="nohint" role="alertdialog" aria-modal="true"
      aria-labelledby="nohint-title" aria-describedby="nohint-msg">
   <div class="nohint-card">
-    <div class="nohint-title">No hint available</div>
+    <div class="nohint-title" id="nohint-title">No hint available</div>
     <div class="nohint-msg" id="nohint-msg">No words can be found!</div>
     <button class="btn-nohint" id="btn-nohint" type="button">OK</button>
   </div>
@@ -802,10 +807,15 @@
       const okHint = (s.hintWord === undefined || s.hintWord === null || typeof s.hintWord === 'string') &&
         (s.hintTiles === undefined || s.hintTiles === null ||
          (Array.isArray(s.hintTiles) && s.hintTiles.every(i => Number.isInteger(i) && i >= 0 && i < CELLS)));
-      if (okBoard && okBank && okNums && okSel && okHint) {
+      // Words already revealed as hints since the last successful submit. Absent in saves made
+      // before this existed, so undefined is accepted and defaulted below.
+      const okShown = s.shownHints === undefined ||
+        (Array.isArray(s.shownHints) && s.shownHints.every(w => typeof w === 'string'));
+      if (okBoard && okBank && okNums && okSel && okHint && okShown) {
         s.gameOver = false;
         if (s.hintWord === undefined) s.hintWord = null;
         if (s.hintTiles === undefined) s.hintTiles = null;
+        if (s.shownHints === undefined) s.shownHints = [];
         return s;
       }
     } catch (e) { console.error(e); }
@@ -1055,12 +1065,21 @@
     const cellsUsed = state.selection.slice();
     const word = selectedWord(state);
     const wordsBefore = state.words;
+    // A word the game has already revealed as a hint can't be submitted. This is checked BEFORE
+    // submitWord, which would otherwise remove the tiles and score it. Nothing is changed or
+    // cleared here: the list stays until a submit actually succeeds, so pressing Submit again
+    // is no way round the rule.
+    if (state.shownHints.includes(word)) {
+      showNoHint("You can't use a hint I've shown you.", "Can't submit");
+      return;
+    }
     const points = submitWord(state, seedDict, validDict);
     if (points === 0) return;
     // The hint is for finding ONE word; once any word is submitted (whether it used the hinted
     // tiles or not), the hint is spent and the button reverts to "Hint".
     state.hintWord = null;
     state.hintTiles = null;
+    state.shownHints = [];   // a successful submit ends the "can't use a shown hint" restriction
     const levelUp = levelUpMessage(wordsBefore, state.words);   // null unless this word crossed a level
 
     cellsUsed.forEach(i => freshCells.add(i));
@@ -1106,6 +1125,7 @@
     state.gameOver = false;
     state.hintWord = null;   // like gameOver, this is page-level flow state, not part of logic.js
     state.hintTiles = null;
+    state.shownHints = [];
     freshCells = new Set(state.board.map((_, i) => i));
     document.getElementById('gameover').classList.add('hidden');
     saveGameState();
@@ -1188,6 +1208,11 @@
       return;
     }
     pendingHintWord = word;
+    // Set every time the dialog opens (it is no longer static text). When a hint is already
+    // showing, the prompt starts with a line naming it; otherwise it is the plain prompt.
+    document.getElementById('hintconfirm-msg').textContent =
+      (isRefreshingHint ? 'The hint was ' + state.hintWord + '.\n' : '') +
+      'Spend ' + HINT_COST + ' points for a hint?';
     showHintConfirm();
   }
 
@@ -1216,6 +1241,7 @@
 
     state.score -= HINT_COST;                       // score can go negative; nothing clamps it
     state.hintWord = pendingHintWord;
+    if (!state.shownHints.includes(pendingHintWord)) state.shownHints.push(pendingHintWord);
     state.hintTiles = hintTiles(state.board, pendingHintWord);
     state.selection = state.hintTiles.slice();
     pendingHintWord = null;
@@ -1224,7 +1250,9 @@
     render();
   }
 
-  function showNoHint() {
+  function showNoHint(message = 'No words can be found!', title = 'No hint available') {
+    document.getElementById('nohint-title').textContent = title;
+    document.getElementById('nohint-msg').textContent = message;
     document.getElementById('nohint').classList.remove('hidden');
     nohintShownAt = Date.now();
   }
