@@ -33,11 +33,6 @@
 
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 
-    /* For Nanna:
-      font-family: sans-serif-smallcaps, monospace;
-      font-weight: 700;
-    */
-
     body {
       background: var(--bg);
       color: var(--text);
@@ -747,6 +742,8 @@
   // (alphabetical) order at the shortest workable length, so the same board+level always offers
   // the same hint.
   function findHintWord(board, seedDict, minLen, excludeWord = null, rng = Math.random) {
+    // excludeWord may be null, one word, or an array of words to skip.
+    const excluded = Array.isArray(excludeWord) ? excludeWord : (excludeWord ? [excludeWord] : []);
     const boardCounts = {};
     for (const ch of board) boardCounts[ch] = (boardCounts[ch] || 0) + 1;
     for (let len = minLen; len <= MAX_WORD_LENGTH; len++) {
@@ -756,7 +753,7 @@
       const start = Math.floor(rng() * words.length);
       for (let k = 0; k < words.length; k++) {
         const w = words[(start + k) % words.length];
-        if (w === excludeWord) continue;
+        if (excluded.includes(w)) continue;
         if (canMakeWord(w, boardCounts)) return w;
       }
     }
@@ -1161,10 +1158,10 @@
   // Pressing Hint always asks first via the confirm dialog, whether or not a hint is already
   // active:
   //   - No existing hint: Yes finds a word and charges 50 points; No does nothing (as before).
-  //   - A hint IS already active: Yes finds a DIFFERENT word (never the one currently shown) and
-  //     charges another 50 points; No just re-displays the current hint's tiles for free,
-  //     discarding whatever the player had tapped since -- the previous "press again" behaviour,
-  //     now reached via No instead of happening immediately on tap.
+  //   - A hint IS already active: the prompt first names it ("The hint was ..."). Yes finds a
+  //     DIFFERENT word (never one already shown this go) and charges another 50 points; No
+  //     clears the active hint from the board and the button, without charging. Either way the
+  //     word stays in shownHints, so it still can't be submitted this go.
   // isRefreshingHint (set when the dialog opens, read when it resolves) is what tells Yes/No
   // which of these two situations they are resolving.
   //
@@ -1197,9 +1194,14 @@
     }
 
     const minLen = minSubmitFor(levelFor(state.words));
-    // When refreshing, the word currently on display must never be offered again as the "new"
-    // hint -- that would not be a different hint at all.
-    const word = findHintWord(state.board, seedDict, minLen, isRefreshingHint ? state.hintWord : null);
+    // Never offer a word the player has already been shown this go: it can't be submitted
+    // anyway (see onSubmit), so paying 50 points to see it again would buy nothing. This still
+    // guarantees a new hint differs from the one on display, and keeps guaranteeing it after a
+    // "No" has cleared the active hint. The active hint is added explicitly in case it came from
+    // a save made before shownHints existed.
+    const excluded = state.shownHints.slice();
+    if (isRefreshingHint && !excluded.includes(state.hintWord)) excluded.push(state.hintWord);
+    const word = findHintWord(state.board, seedDict, minLen, excluded);
     // console.log('hint word:', word);
     if (!word) {
       // No (different) word exists. If a hint was already showing, leave it exactly as it is --
@@ -1225,9 +1227,19 @@
     if (Date.now() - hintConfirmShownAt < HINTCONFIRM_ARM_MS) return;
     document.getElementById('hintconfirm').classList.add('hidden');
     if (isRefreshingHint) {
-      // No: keep the existing hint, just re-show its tiles for free (the old "press again"
-      // behaviour), discarding whatever the player had tapped since.
-      state.selection = state.hintTiles.slice();
+      // No: the player has chosen not to take a new hint, so the one they were shown is
+      // finished with and every trace of it is removed -- the start of the hint word is no
+      // longer put at the top, and the button goes back to plain "Hint". No charge.
+      // shownHints is deliberately left alone, so the word still can't be submitted this go.
+      //
+      // The selection is cleared only if it still begins with the hint's tiles (i.e. the hint
+      // is what is showing at the top). If the player has since built a word of their own there
+      // is no hint trace to remove, and wiping their work would be a surprise.
+      const hintStillShowing = state.hintTiles && state.hintTiles.length > 0 &&
+        state.hintTiles.every((t, i) => state.selection[i] === t);
+      if (hintStillShowing) state.selection = [];
+      state.hintWord = null;
+      state.hintTiles = null;
       saveGameState();
       render();
     }
