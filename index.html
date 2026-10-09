@@ -262,20 +262,21 @@
       position: fixed; inset: 0;
       background: rgba(26,32,44,0.55);
       display: flex; align-items: center; justify-content: center;
-      z-index: 20;
+      z-index: 30;
     }
     .gameover-overlay.hidden { display: none; }
     .gameover-card {
       width: calc(var(--tile-size) * 5 + var(--gap) * 4 + 20px);
+      max-width: 94vw;
       background: #fff;
       border: 2px solid var(--accent);
       border-radius: 14px;
-      padding: 20px 16px;
+      padding: 22px 18px 18px;
       text-align: center;
-      display: flex; flex-direction: column; align-items: center; gap: 10px;
+      display: flex; flex-direction: column; align-items: center; gap: 14px;
       box-shadow: 0 8px 32px rgba(0,0,0,0.25);
     }
-    .gameover-title { font-family: 'Fraunces', serif; font-size: calc(var(--font-btn) * 1.5); color: var(--accent); }
+    .gameover-title { font-family: 'Fraunces', serif; font-size: calc(var(--font-btn) * 1.5); font-weight: 700; color: var(--accent); }
     .gameover-label { font-size: var(--font-label); letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
     .gameover-score { font-size: calc(var(--font-btn) * 2.2); color: var(--gold); font-weight: 600; line-height: 1.1; }
     .gameover-best  { font-size: var(--font-btn); color: var(--muted); }
@@ -286,6 +287,56 @@
     }
     .gameover-newbest.hidden { display: none; }
     .btn-gameover { background: var(--accent); color: #fff; letter-spacing: 2px; width: 100%; margin-top: 4px; }
+    .btn-showwords { background: var(--surface); color: var(--teal); border: 2px solid var(--teal); font-weight: 500; letter-spacing: 2px; width: 100%; margin-top: 4px; }
+
+    /* "Your words" pop-up, opened from the game-over dialog. A flex column in three parts: a fixed
+       header (title + highest scoring word), a list that is the ONLY part that scrolls, and a
+       fixed footer holding the Close button. */
+    .words-overlay {
+      position: fixed; inset: 0;
+      background: rgba(26,32,44,0.55);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 30;
+    }
+    .words-overlay.hidden { display: none; }
+    .words-card {
+      width: calc(var(--tile-size) * 5 + var(--gap) * 4 + 20px);
+      max-width: 94vw;
+      max-height: 82vh;
+      background: #fff;
+      border: 2px solid var(--teal);
+      border-radius: 14px;
+      display: flex; flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+    }
+    .words-header {
+      flex: 0 0 auto;
+      padding: 20px 18px 12px;
+      text-align: center;
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      border-bottom: 1px solid var(--panel);
+    }
+    .words-title { font-family: 'Fraunces', serif; font-size: calc(var(--font-btn) * 1.5); font-weight: 700; color: var(--teal); }
+    .words-best {
+      width: 100%;
+      background: #fef3c7; border: 1px solid rgba(217,119,6,0.35);
+      border-radius: 8px; padding: 8px 12px;
+    }
+    .words-best-label { font-size: var(--font-label); letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+    .words-best-value { font-size: calc(var(--font-btn) * 1.2); font-weight: 700; color: var(--gold); overflow-wrap: anywhere; }
+    .words-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 18px; }
+    .words-row {
+      display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+      padding: 9px 2px; border-bottom: 1px solid var(--panel);
+      font-size: calc(var(--font-btn) * 1.2);
+    }
+    .words-row:last-child { border-bottom: none; }
+    .words-row-word { font-weight: 700; letter-spacing: 1px; color: var(--text); overflow-wrap: anywhere; }
+    .words-row-pts { flex: 0 0 auto; font-size: var(--font-btn); color: var(--muted); }
+    .words-empty { padding: 18px 0; text-align: center; font-size: var(--font-btn); color: var(--muted); }
+    .words-footer { flex: 0 0 auto; padding: 12px 18px 18px; border-top: 1px solid var(--panel); }
+    .btn-words-close { background: var(--teal); color: #fff; letter-spacing: 2px; width: 100%; }
 
     /* Level-up dialog: an in-page "alert" with one OK button. The backdrop swallows every tap,
        so nothing behind it can be played until the player presses OK. */
@@ -427,14 +478,32 @@
   <button class="btn-finish" id="btn-finish">Finish game</button>
 </div>
 
-<div class="gameover-overlay hidden" id="gameover">
+<div class="gameover-overlay hidden" id="gameover" role="alertdialog" aria-modal="true"
+     aria-labelledby="go-title">
   <div class="gameover-card">
-    <div class="gameover-title">Game Over</div>
+    <div class="gameover-title" id="go-title">Game Over</div>
     <div class="gameover-label">Your score</div>
     <div class="gameover-score" id="go-score">0</div>
     <div class="gameover-newbest hidden" id="go-newbest">&#127942; New best score!</div>
     <div class="gameover-best" id="go-best">Best: 0</div>
+    <button class="btn-showwords" id="btn-showwords" type="button">Your Words</button>
     <button class="btn-gameover" id="btn-gameover">New Game</button>
+  </div>
+</div>
+
+<div class="words-overlay hidden" id="words" role="dialog" aria-modal="true" aria-labelledby="words-title">
+  <div class="words-card">
+    <div class="words-header">
+      <div class="words-title" id="words-title">Your words</div>
+      <div class="words-best">
+        <div class="words-best-label">Highest scoring word</div>
+        <div class="words-best-value" id="words-best-value"></div>
+      </div>
+    </div>
+    <div class="words-list" id="words-list"></div>
+    <div class="words-footer">
+      <button class="btn-words-close" id="btn-words-close" type="button">Close</button>
+    </div>
   </div>
 </div>
 
@@ -809,11 +878,16 @@
       // defaulted below.
       const okShown = s.shownHints === undefined ||
         (Array.isArray(s.shownHints) && s.shownHints.every(w => typeof w === 'string'));
-      if (okBoard && okBank && okNums && okSel && okHint && okShown) {
+      // Every word submitted this game, in order, as {word, points} (for the game-over word
+      // list). Absent in saves made before this existed, so undefined is accepted and defaulted.
+      const okLog = s.wordLog === undefined ||
+        (Array.isArray(s.wordLog) && s.wordLog.every(e => e && typeof e.word === 'string' && Number.isInteger(e.points)));
+      if (okBoard && okBank && okNums && okSel && okHint && okShown && okLog) {
         s.gameOver = false;
         if (s.hintWord === undefined) s.hintWord = null;
         if (s.hintTiles === undefined) s.hintTiles = null;
         if (s.shownHints === undefined) s.shownHints = [];
+        if (s.wordLog === undefined) s.wordLog = [];
         return s;
       }
     } catch (e) { console.error(e); }
@@ -1074,6 +1148,7 @@
     }
     const points = submitWord(state, seedDict, validDict);
     if (points === 0) return;
+    state.wordLog.push({ word: word, points: points });   // for the game-over word list
     // The hint is for finding ONE word; once any word is submitted (whether it used the hinted
     // tiles or not), the hint is spent and the button reverts to "Hint".
     state.hintWord = null;
@@ -1125,10 +1200,58 @@
     state.hintWord = null;   // like gameOver, this is page-level flow state, not part of logic.js
     state.hintTiles = null;
     state.shownHints = [];
+    state.wordLog = [];
     freshCells = new Set(state.board.map((_, i) => i));
     document.getElementById('gameover').classList.add('hidden');
     saveGameState();
     render();
+  }
+
+  // ═══ Game-over word list ═══
+  // The "Show Words" pop-up takes the game-over dialog's place (that dialog is hidden meanwhile)
+  // and Close swaps it back, so the player returns to exactly the dialog they came from.
+  // Words are listed in the order they were submitted; state.wordLog holds one {word, points}
+  // per successful submit.
+  function showWordsPopup() {
+    const log = state.wordLog || [];
+
+    // Highest scoring word. Strict ">" means that if several words tie, the earliest one wins.
+    let best = null;
+    for (const entry of log) if (!best || entry.points > best.points) best = entry;
+    document.getElementById('words-best-value').textContent =
+      best ? best.word + '  ' + best.points + ' pts' : '\u2014';
+
+    const list = document.getElementById('words-list');
+    list.innerHTML = '';
+    if (log.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'words-empty';
+      empty.textContent = 'No words were submitted this game.';
+      list.appendChild(empty);
+    } else {
+      for (const entry of log) {
+        const row = document.createElement('div');
+        row.className = 'words-row';
+        const w = document.createElement('span');
+        w.className = 'words-row-word';
+        w.textContent = entry.word;
+        const pts = document.createElement('span');
+        pts.className = 'words-row-pts';
+        pts.textContent = entry.points + ' pts';
+        row.appendChild(w);
+        row.appendChild(pts);
+        list.appendChild(row);
+      }
+    }
+
+    document.getElementById('gameover').classList.add('hidden');
+    document.getElementById('words').classList.remove('hidden');
+    list.scrollTop = 0;   // always open at the first word submitted
+  }
+
+  function closeWordsPopup() {
+    document.getElementById('words').classList.add('hidden');
+    document.getElementById('gameover').classList.remove('hidden');
   }
 
   // ═══ Level-up dialog ═══
@@ -1320,6 +1443,10 @@
   document.getElementById('btn-hintconfirm-no').addEventListener('click', cancelHintConfirm);
   document.getElementById('btn-nohint').addEventListener('click', dismissNoHint);
   fastTap(document.getElementById('btn-gameover'), startNewGame);
+  // Plain click, like the other dialog buttons: delivered once, to the button itself, so opening
+  // or closing the word list can never let a leftover tap land on whatever is behind it.
+  document.getElementById('btn-showwords').addEventListener('click', showWordsPopup);
+  document.getElementById('btn-words-close').addEventListener('click', closeWordsPopup);
   // Plain click, not fastTap: it is delivered once, to OK itself, so closing the dialog can
   // never let a leftover tap fall through onto a tile underneath.
   document.getElementById('btn-levelup').addEventListener('click', dismissLevelUp);
