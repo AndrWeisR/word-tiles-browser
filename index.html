@@ -804,8 +804,9 @@
       const okHint = (s.hintWord === undefined || s.hintWord === null || typeof s.hintWord === 'string') &&
         (s.hintTiles === undefined || s.hintTiles === null ||
          (Array.isArray(s.hintTiles) && s.hintTiles.every(i => Number.isInteger(i) && i >= 0 && i < CELLS)));
-      // Words already revealed as hints since the last successful submit. Absent in saves made
-      // before this existed, so undefined is accepted and defaulted below.
+      // Hint words the game has named in full since the last successful submit (these can't be
+      // submitted). Absent in saves made before this existed, so undefined is accepted and
+      // defaulted below.
       const okShown = s.shownHints === undefined ||
         (Array.isArray(s.shownHints) && s.shownHints.every(w => typeof w === 'string'));
       if (okBoard && okBank && okNums && okSel && okHint && okShown) {
@@ -1062,7 +1063,8 @@
     const cellsUsed = state.selection.slice();
     const word = selectedWord(state);
     const wordsBefore = state.words;
-    // A word the game has already revealed as a hint can't be submitted. This is checked BEFORE
+    // A word the game has named in full as a hint can't be submitted. (A hint that only showed
+    // the start of its word does not count -- that word is fair game.) This is checked BEFORE
     // submitWord, which would otherwise remove the tiles and score it. Nothing is changed or
     // cleared here: the list stays until a submit actually succeeds, so pressing Submit again
     // is no way round the rule.
@@ -1160,8 +1162,9 @@
   //   - No existing hint: Yes finds a word and charges 50 points; No does nothing (as before).
   //   - A hint IS already active: the prompt first names it ("The hint was ..."). Yes finds a
   //     DIFFERENT word (never one already shown this go) and charges another 50 points; No
-  //     clears the active hint from the board and the button, without charging. Either way the
-  //     word stays in shownHints, so it still can't be submitted this go.
+  //     clears the active hint from the board and the button, without charging. Naming the old
+  //     hint in that prompt adds it to shownHints, so it can't be submitted this go -- but a hint
+  //     that was only ever partly revealed (never named) can be submitted as normal.
   // isRefreshingHint (set when the dialog opens, read when it resolves) is what tells Yes/No
   // which of these two situations they are resolving.
   //
@@ -1210,8 +1213,14 @@
       return;
     }
     pendingHintWord = word;
-    // Set every time the dialog opens (it is no longer static text). When a hint is already
-    // showing, the prompt starts with a line naming it; otherwise it is the plain prompt.
+    // When a hint is already showing, the prompt starts with a line naming it IN FULL -- the one
+    // moment the game actually displays a hint word. From then on that word can't be submitted
+    // this go (until a submit succeeds), whether or not the player buys another hint.
+    if (isRefreshingHint && !state.shownHints.includes(state.hintWord)) {
+      state.shownHints.push(state.hintWord);
+      saveGameState();
+    }
+    // Set every time the dialog opens (it is no longer static text).
     document.getElementById('hintconfirm-msg').textContent =
       (isRefreshingHint ? 'The hint was ' + state.hintWord + '.\n' : '') +
       'Spend ' + HINT_COST + ' points for a hint?';
@@ -1230,7 +1239,8 @@
       // No: the player has chosen not to take a new hint, so the one they were shown is
       // finished with and every trace of it is removed -- the start of the hint word is no
       // longer put at the top, and the button goes back to plain "Hint". No charge.
-      // shownHints is deliberately left alone, so the word still can't be submitted this go.
+      // shownHints is deliberately left alone: the prompt named this word in full, so it still
+      // can't be submitted this go.
       //
       // The selection is cleared only if it still begins with the hint's tiles (i.e. the hint
       // is what is showing at the top). If the player has since built a word of their own there
@@ -1253,7 +1263,9 @@
 
     state.score -= HINT_COST;                       // score can go negative; nothing clamps it
     state.hintWord = pendingHintWord;
-    if (!state.shownHints.includes(pendingHintWord)) state.shownHints.push(pendingHintWord);
+    // Deliberately NOT added to shownHints here: only the first few letters have been shown, so
+    // the player still has to find the rest and may submit this word. It becomes blocked only if
+    // the game later names it in full (see onHint).
     state.hintTiles = hintTiles(state.board, pendingHintWord);
     state.selection = state.hintTiles.slice();
     pendingHintWord = null;
