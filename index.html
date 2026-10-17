@@ -591,9 +591,21 @@
   // Level 1: 4-6, 2: 4-7, 3: 4-8, 4: 4-9, 5: 4-10, then the minimum rises:
   // 6: 5-10, 7: 6-11, 8: 7-12, 9: 8-13...
   function lengthRange(level) {
-    if (level <= 5) return { min: 4, max: 5 + level };      // 1->6 ... 5->10
-    const min = Math.min(MAX_WORD_LENGTH, 4 + (level - 5)); // 6->5 ... 10->9, 11+->10
-    return { min, max: level + 5 };
+    let checkLevel = level;
+    let wordsLeftAtLevel = WORDS_PER_LEVEL - (state.words % WORDS_PER_LEVEL);
+    // console.log('wordsLeftAtLevel = ' + wordsLeftAtLevel);
+    if (wordsLeftAtLevel <= 2) {
+      // Near the end of a level, start seeding with slightly longer words.
+      checkLevel++;
+    }
+    if (checkLevel <= 4) {
+      return { min: 4, max: checkLevel + 4 };                    // 1 (4+): 4-5 ... 4 (7+): 4-8
+    }
+    if (checkLevel <= 7) {
+      return { min: 5 + (checkLevel - 5), max: checkLevel + 4 };      // 5 (8+): 5-9, 6 (9+): 6-10, 7 (10+): 7-11
+    }
+    const min = Math.min(MAX_WORD_LENGTH, 6 + (checkLevel - 5)); // 8 (11+): 9-12, 9 (12+): 10-13
+    return { min, max: checkLevel + 4 };
   }
 
   // ── Dictionaries ─────────────────────────────────────────────────────────────
@@ -628,6 +640,7 @@
   // seedDict must have been built with includeByLength=true (the default).
   function pickSeed(seedDict, level, rng = Math.random) {
     const { min, max } = lengthRange(level);
+    // console.log('min, max = ' + min + ' - ' + max);
     let total = 0;
     for (let n = min; n <= max; n++) total += (seedDict.byLength[n] || []).length;
     let k = Math.floor(rng() * total);
