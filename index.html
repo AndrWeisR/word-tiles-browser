@@ -188,35 +188,46 @@
     .actions {
       display: grid;
       grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto auto;
       gap: var(--gap);
       margin-bottom: 8px;
-    }
-
-    .btn-finish {
-      grid-column: 1 / -1;
     }
 
     .actions button {
       width: 100%;
       box-sizing: border-box;
+      padding: var(--btn-pad);
+      font-size: calc(var(--font-btn) * 1.15);
+      text-transform: uppercase;
+      font-weight: 700;
     }
 
-    button {
-      font-family: sans-serif, monospace;
-      cursor: pointer;
-      border-radius: 8px;
-      border: none;
-      font-size: var(--font-btn);
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      padding: var(--btn-pad);
-      transition: all 0.15s;
+    .btn-hint {
+      grid-column: 1;
+      grid-row: 1;
     }
-    .btn-confirm { background: var(--teal); color: #ffffff; font-weight: 500; flex: 1; }
-    .btn-confirm:disabled { background: rgba(8,145,178,0.18); color: var(--muted); cursor: not-allowed; }
-    /* Backspace: tap = delete last letter, press-and-hold = clear the word. Uses aria-disabled
-       rather than the disabled attribute so a press that empties the word (and so greys the
-       button out) is never interrupted by the browser's disabled-control handling. */
+
+    .btn-finish {
+      grid-column: 1;
+      grid-row: 2;
+      background: var(--surface);
+      color: var(--accent);
+      border: 2px solid var(--accent);
+      font-weight: 500;
+    }
+
+    .btn-confirm {
+      grid-column: 2;
+      grid-row: 1 / span 2;
+      background: var(--surface);
+      color: var(--teal);
+      border: 2px solid var(--teal);
+      font-weight: 500;
+      height: 100%;
+    }
+    .btn-confirm:disabled { background: var(--surface); color: var(--muted); border-color: var(--tile-border); cursor: not-allowed; }
+
+    /* Backspace / shuffle button */
     .btn-back {
       flex: 0 0 auto;
       width: calc(var(--word-height) * 1.1);
@@ -229,8 +240,6 @@
       border: 2px solid var(--tile-border);
       border-radius: var(--radius);
       -webkit-touch-callout: none;
-      /* The press is tracked in JS. Without this the browser turns a drifting finger into a
-         pan and cancels the press after a few pixels, which a trembling hand would trigger. */
       touch-action: none;
     }
     .btn-back svg {
@@ -241,21 +250,11 @@
     .btn-back:active { background: var(--panel); }
     .btn-back[aria-disabled="true"] { color: var(--muted); opacity: 0.45; cursor: default; }
     .btn-back[aria-disabled="true"]:active { background: var(--surface); }
-    /* Shuffle mode: no letters selected, so the button reshuffles the grid instead of
-       backspacing. Fully active (not greyed out) with its own icon, distinguished from the
-       backspace look by an accent border/colour rather than the muted disabled styling above. */
     .btn-back.shuffle-mode { color: var(--teal); border-color: var(--teal); opacity: 1; cursor: pointer; }
     .btn-back.shuffle-mode:active { background: rgba(8,145,178,0.12); }
     .btn-back .icon-backspace, .btn-back .icon-shuffle { display: none; }
     .btn-back:not(.shuffle-mode) .icon-backspace { display: block; }
     .btn-back.shuffle-mode .icon-shuffle { display: block; }
-    .btn-finish {
-      width: calc(var(--tile-size) * 5 + var(--gap) * 4 + 20px);
-      background: var(--surface);
-      color: var(--accent);
-      border: 2px solid var(--accent);
-      font-weight: 500;
-    }
 
     /* Game over overlay */
     .gameover-overlay {
@@ -474,8 +473,8 @@
 
 <div class="actions">
   <button class="btn-hint" id="btn-hint" type="button">Hint</button>
-  <button class="btn-confirm" id="btn-confirm" disabled>Submit</button>
   <button class="btn-finish" id="btn-finish">Finish game</button>
+  <button class="btn-confirm" id="btn-confirm" disabled>Submit</button>
 </div>
 
 <div class="gameover-overlay hidden" id="gameover" role="alertdialog" aria-modal="true"
