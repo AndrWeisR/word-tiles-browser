@@ -591,7 +591,7 @@
   // 6: 5-10, 7: 6-11, 8: 7-12, 9: 8-13...
   function lengthRange(level) {
     let checkLevel = level;
-    let wordsLeftAtLevel = WORDS_PER_LEVEL - ((state.words ?? 0) % WORDS_PER_LEVEL);
+    let wordsLeftAtLevel = WORDS_PER_LEVEL - ((state.words || 0) % WORDS_PER_LEVEL);
     // console.log('wordsLeftAtLevel = ' + wordsLeftAtLevel);
     if (wordsLeftAtLevel <= 2) {
       // Near the end of a level, start seeding with slightly longer words.
