@@ -198,7 +198,7 @@
       box-sizing: border-box;
       padding: var(--btn-pad);
       font-size: calc(var(--font-btn) * 1.15);
-      text-transform: uppercase;
+      /* text-transform: uppercase; */
       font-weight: 700;
     }
 
@@ -219,8 +219,8 @@
     .btn-confirm {
       grid-column: 2;
       grid-row: 1 / span 2;
-      background: var(--surface);
-      color: var(--teal);
+      color: var(--surface);
+      background: var(--teal);
       border: 2px solid var(--teal);
       font-weight: 500;
       height: 100%;
@@ -392,7 +392,8 @@
     .hintconfirm-title { font-family: 'Fraunces', serif; font-size: calc(var(--font-btn) * 1.5); font-weight: 700; color: var(--gold); }
     .hintconfirm-msg { font-size: calc(var(--font-btn) * 1.2); line-height: 1.4; color: var(--text); overflow-wrap: anywhere; white-space: pre-line; }
     .hintconfirm-buttons { display: flex; gap: var(--gap); width: 100%; margin-top: 4px; }
-    .btn-hintconfirm-yes, .btn-hintconfirm-no { flex: 1; letter-spacing: 2px; }
+    .btn { height: auto; font-size: calc(var(--font-btn) * 1.15); padding: var(--btn-pad); }
+    .btn-hintconfirm-yes, .btn-hintconfirm-no { flex: 1; letter-spacing: 2px;}
     .btn-hintconfirm-yes { background: var(--gold); color: #fff; }
     .btn-hintconfirm-no  { background: var(--surface); color: var(--muted); border: 1px solid var(--tile-border); }
 
@@ -455,7 +456,7 @@
 <div class="word-row">
   <div class="word-wrap" id="word-wrap"><div class="word-text" id="word-text"></div></div>
   <button class="btn-back shuffle-mode" id="btn-back" type="button" aria-disabled="false"
-          aria-label="Shuffle the grid. Tap or press and hold to shuffle.">
+          aria-label="Shuffle the grid. Tap to shuffle, press and hold to sort by value then alphabetically.">
     <svg class="icon-backspace" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"
          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <line x1="20" y1="12" x2="4" y2="12"/><polyline points="11 5 4 12 11 19"/>
@@ -472,9 +473,9 @@
 <div class="board-wrap"><div class="board" id="board"></div></div>
 
 <div class="actions">
-  <button class="btn-hint" id="btn-hint" type="button">Hint</button>
-  <button class="btn-finish" id="btn-finish">Finish game</button>
-  <button class="btn-confirm" id="btn-confirm" disabled>Submit</button>
+  <button class="btn btn-hint" id="btn-hint" type="button">Hint</button>
+  <button class="btn btn-finish" id="btn-finish">Finish game</button>
+  <button class="btn btn-confirm" id="btn-confirm" disabled>Submit</button>
 </div>
 
 <div class="gameover-overlay hidden" id="gameover" role="alertdialog" aria-modal="true"
@@ -485,8 +486,8 @@
     <div class="gameover-score" id="go-score">0</div>
     <div class="gameover-newbest hidden" id="go-newbest">&#127942; New best score!</div>
     <div class="gameover-best" id="go-best">Best: 0</div>
-    <button class="btn-showwords" id="btn-showwords" type="button">Your Words</button>
-    <button class="btn-gameover" id="btn-gameover">New Game</button>
+    <button class="btn btn-showwords" id="btn-showwords" type="button">Your Words</button>
+    <button class="btn btn-gameover" id="btn-gameover">New Game</button>
   </div>
 </div>
 
@@ -501,7 +502,7 @@
     </div>
     <div class="words-list" id="words-list"></div>
     <div class="words-footer">
-      <button class="btn-words-close" id="btn-words-close" type="button">Close</button>
+      <button class="btn btn-words-close" id="btn-words-close" type="button">Close</button>
     </div>
   </div>
 </div>
@@ -512,8 +513,8 @@
     <div class="hintconfirm-title">Use a hint?</div>
     <div class="hintconfirm-msg" id="hintconfirm-msg">Spend 50 points for a hint?</div>
     <div class="hintconfirm-buttons">
-      <button class="btn-hintconfirm-no" id="btn-hintconfirm-no" type="button">No</button>
-      <button class="btn-hintconfirm-yes" id="btn-hintconfirm-yes" type="button">Yes</button>
+      <button class="btn btn-hintconfirm-no" id="btn-hintconfirm-no" type="button">No</button>
+      <button class="btn btn-hintconfirm-yes" id="btn-hintconfirm-yes" type="button">Yes</button>
     </div>
   </div>
 </div>
@@ -523,7 +524,7 @@
   <div class="nohint-card">
     <div class="nohint-title" id="nohint-title">No hint available</div>
     <div class="nohint-msg" id="nohint-msg">No words can be found!</div>
-    <button class="btn-nohint" id="btn-nohint" type="button">OK</button>
+    <button class="btn btn-nohint" id="btn-nohint" type="button">OK</button>
   </div>
 </div>
 
@@ -532,7 +533,7 @@
   <div class="levelup-card">
     <div class="levelup-title" id="levelup-title">Level up!</div>
     <div class="levelup-msg" id="levelup-msg"></div>
-    <button class="btn-levelup" id="btn-levelup" type="button">OK</button>
+    <button class="btn btn-levelup" id="btn-levelup" type="button">OK</button>
   </div>
 </div>
 
@@ -541,7 +542,7 @@
 <script>
   // ═══ Game logic (identical to test/logic.js, which is unit-tested in Node) ═══
   // Pure game logic for Word Tiles. No DOM access, so it can be unit-tested in Node
-  // and pasted verbatim into wordtiles.html.
+  // and pasted verbatim into index.html.
   //
   // State shape (all JSON-serialisable so it can go straight into localStorage):
   //   board:   25 entries, each a single letter 'A'..'Z' (or null while a refill is pending)
@@ -707,6 +708,22 @@
       [state.board[i], state.board[j]] = [state.board[j], state.board[i]];
       [from[i], from[j]] = [from[j], from[i]];
     }
+    return from;
+  }
+
+  // Sorts the board in place: by letter value (lowest first), then alphabetically within the
+  // same value, filling the grid in reading order (left to right, top to bottom). Like
+  // shuffleBoard, returns `from` where from[newIndex] = oldIndex, so callers can animate it.
+  // The final "a - b" keeps identical letters in their existing relative order.
+  function sortBoard(state) {
+    const from = state.board.map((_, i) => i);
+    from.sort(function (a, b) {
+      const ca = state.board[a], cb = state.board[b];
+      return (LETTER_VALUES[ca] - LETTER_VALUES[cb]) ||
+             (ca < cb ? -1 : ca > cb ? 1 : 0) ||
+             (a - b);
+    });
+    state.board = from.map(function (oldIndex) { return state.board[oldIndex]; });
     return from;
   }
 
@@ -988,7 +1005,7 @@
     backBtn.setAttribute('aria-disabled', 'false');
     backBtn.setAttribute('aria-label', hasSel
       ? 'Backspace. Tap to delete the last letter, press and hold to clear the word.'
-      : 'Shuffle the grid. Tap or press and hold to shuffle.');
+      : 'Shuffle the grid. Tap to shuffle, press and hold to sort by value then alphabetically.');
 
     const hintBtn = document.getElementById('btn-hint');
     hintBtn.textContent = state.hintWord ? ('Hint = ' + hintRevealText(state.hintWord)) : 'Hint';
@@ -1019,11 +1036,14 @@
   // the style changes used by a traditional FLIP transition, causing the transform to jump
   // straight to its final position. element.animate() explicitly creates the animation and
   // avoids that timing problem.
-  function performShuffle() {
+  function performShuffle() { animateBoardChange(shuffleBoard); }
+  function performSort()    { animateBoardChange(sortBoard); }
+
+  function animateBoardChange(reorder) {
     const boardEl = document.getElementById('board');
     const oldRects = Array.from(boardEl.children).map(cell => cell.getBoundingClientRect());
 
-    const from = shuffleBoard(state);
+    const from = reorder(state);
     saveGameState();
     render();
 
@@ -1083,8 +1103,8 @@
   function onBackspaceHold() {
     if (state.gameOver) return;
     if (state.selection.length === 0) {
-      // Shuffle mode: a long press does the same thing as a tap -- there is no "clear" to do.
-      performShuffle();
+      // Shuffle mode: a long press sorts the grid by tile value, then alphabetically.
+      performSort();
       return;
     }
     if (!clearSelection(state)) return;
