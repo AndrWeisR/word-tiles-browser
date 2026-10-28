@@ -487,6 +487,7 @@
     <div class="gameover-newbest hidden" id="go-newbest">&#127942; New best score!</div>
     <div class="gameover-best" id="go-best">Best: 0</div>
     <button class="btn btn-showwords" id="btn-showwords" type="button">Your Words</button>
+    <button class="btn btn-showwords" id="btn-missedwords" type="button">Missed Words</button>
     <button class="btn btn-gameover" id="btn-gameover">New Game</button>
   </div>
 </div>
@@ -577,7 +578,7 @@
 
   // ── Levels ───────────────────────────────────────────────────────────────────
   function levelFor(words) {
-    // return 8; // Uncomment this to test a specific level.
+    //return 12; // Uncomment this to test a specific level.
     return Math.floor(words / WORDS_PER_LEVEL) + 1;
   }
 
@@ -1252,37 +1253,75 @@
     for (const entry of log) if (!best || entry.points > best.points) best = entry;
     document.getElementById('words-best-value').textContent =
       best ? best.word + '  ' + best.points + ' pts' : '\u2014';
-
-    const list = document.getElementById('words-list');
-    list.innerHTML = '';
-    if (log.length === 0) {
-      const empty = document.createElement('div');
-      empty.className = 'words-empty';
-      empty.textContent = 'No words were submitted this game.';
-      list.appendChild(empty);
-    } else {
-      for (const entry of log) {
-        const row = document.createElement('div');
-        row.className = 'words-row';
-        const w = document.createElement('span');
-        w.className = 'words-row-word';
-        w.textContent = entry.word;
-        const pts = document.createElement('span');
-        pts.className = 'words-row-pts';
-        pts.textContent = entry.points + ' pts';
-        row.appendChild(w);
-        row.appendChild(pts);
-        list.appendChild(row);
-      }
-    }
-
+    document.getElementById('words-title').textContent = 'Your words';
+    document.querySelector('.words-best').style.display = '';
+    populateWordsList(log.map(entry => ({ word: entry.word, points: entry.points })),
+      'No words were submitted this game.');
     document.getElementById('gameover').classList.add('hidden');
     document.getElementById('words').classList.remove('hidden');
-    list.scrollTop = 0;   // always open at the first word submitted
+    document.getElementById('words-list').scrollTop = 0;
+  }
+
+  // Populate the shared word-list dialog for either submitted or missed words.
+  function populateWordsList(entries, emptyMessage) {
+    const list = document.getElementById('words-list');
+    list.innerHTML = '';
+    if (entries.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'words-empty';
+      empty.textContent = emptyMessage;
+      list.appendChild(empty);
+      return;
+    }
+    for (const entry of entries) {
+      const row = document.createElement('div');
+      row.className = 'words-row';
+      const w = document.createElement('span');
+      w.className = 'words-row-word';
+      w.textContent = entry.word;
+      const pts = document.createElement('span');
+      pts.className = 'words-row-pts';
+      pts.textContent = entry.points + ' pts';
+      row.appendChild(w);
+      row.appendChild(pts);
+      list.appendChild(row);
+    }
+  }
+
+  function showMissedWordsPopup() {
+    const boardCounts = {};
+    for (const letter of state.board) boardCounts[letter] = (boardCounts[letter] || 0) + 1;
+    const minLen = minSubmitFor(levelFor(state.words));
+
+    function findWords(dict) {
+      const candidates = [];
+      for (const word of dict.set) {
+        if (word.length < minLen) continue;
+        if (!canMakeWord(word, boardCounts)) continue;
+        candidates.push({ word: word, points: wordValue(word) });
+      }
+      candidates.sort((a, b) => a.word.length - b.word.length);
+      return candidates.slice(0, 5);
+    }
+
+    // Try seedDict first. Only fall back to validDict if no words are found.
+    let missed = findWords(seedDict);
+    if (missed.length === 0) {
+      missed = findWords(validDict);
+    }
+
+    document.getElementById('words-title').textContent = 'Missed words';
+    document.querySelector('.words-best').style.display = 'none';
+    populateWordsList(missed, 'No missed words found.');
+    document.getElementById('gameover').classList.add('hidden');
+    document.getElementById('words').classList.remove('hidden');
+    document.getElementById('words-list').scrollTop = 0;
   }
 
   function closeWordsPopup() {
     document.getElementById('words').classList.add('hidden');
+    document.getElementById('words-title').textContent = 'Your words';
+    document.querySelector('.words-best').style.display = '';
     document.getElementById('gameover').classList.remove('hidden');
   }
 
@@ -1478,6 +1517,7 @@
   // Plain click, like the other dialog buttons: delivered once, to the button itself, so opening
   // or closing the word list can never let a leftover tap land on whatever is behind it.
   document.getElementById('btn-showwords').addEventListener('click', showWordsPopup);
+  document.getElementById('btn-missedwords').addEventListener('click', showMissedWordsPopup);
   document.getElementById('btn-words-close').addEventListener('click', closeWordsPopup);
   // Plain click, not fastTap: it is delivered once, to OK itself, so closing the dialog can
   // never let a leftover tap fall through onto a tile underneath.
