@@ -578,7 +578,7 @@
 
   // ── Levels ───────────────────────────────────────────────────────────────────
   function levelFor(words) {
-    //return 12; // Uncomment this to test a specific level.
+    // return 8; // Uncomment this to test a specific level.
     return Math.floor(words / WORDS_PER_LEVEL) + 1;
   }
 
@@ -1301,7 +1301,7 @@
         candidates.push({ word: word, points: wordValue(word) });
       }
       candidates.sort((a, b) => a.word.length - b.word.length);
-      return candidates.slice(0, 5);
+      return candidates; // This was to return only the 1st five words. .slice(0, 5);
     }
 
     // Try seedDict first. Only fall back to validDict if no words are found.
