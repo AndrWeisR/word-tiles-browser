@@ -78,9 +78,9 @@
       color: var(--muted);
       margin-bottom: 2px;
     }
-    .hud-value { font-size: var(--font-ui); font-weight: 500; color: var(--text); }
+    .hud-value { font-size: var(--font-ui); font-weight: 1000; color: var(--text); }
     .hud-value.gold { color: var(--gold); }
-    .hud-value.teal { color: var(--teal); }
+
 
     /* Word being built. Fixed height so the grid never jumps as letters are added. */
     /* Word bar + backspace button sit side by side; together they span the board width. */
@@ -448,9 +448,6 @@
   <div class="hud-box"><div class="hud-label">Score</div><div class="hud-value gold" id="score">0</div></div>
   <div class="hud-box"><div class="hud-label">Level</div><div class="hud-value" id="level">1</div></div>
   <div class="hud-box"><div class="hud-label">Best</div><div class="hud-value gold" id="highscore">0</div></div>
-  <div class="hud-box" id="btn-new-game-hud" style="cursor: pointer;">
-    <div class="hud-label">Game</div><div class="hud-value teal">New</div>
-  </div>
 </div>
 
 <div class="word-row">
@@ -1522,9 +1519,6 @@
   // Plain click, not fastTap: it is delivered once, to OK itself, so closing the dialog can
   // never let a leftover tap fall through onto a tile underneath.
   document.getElementById('btn-levelup').addEventListener('click', dismissLevelUp);
-  fastTap(document.getElementById('btn-new-game-hud'), function () {
-    if (state && confirm('Start a new game?')) startNewGame();
-  });
 
   // ═══ Layout (same approach as SumStack: size everything from the viewport width) ═══
   function applyLayout() {
