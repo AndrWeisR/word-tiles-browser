@@ -422,6 +422,90 @@
     .nohint-msg { font-size: calc(var(--font-btn) * 1.2); line-height: 1.4; color: var(--text); overflow-wrap: anywhere; }
     .btn-nohint { background: var(--accent); color: #fff; letter-spacing: 2px; width: 100%; margin-top: 4px; }
 
+    /* "Buy Letter" button in the HUD row: same box as the HUD stats, but tappable. */
+    .hud-btn {
+      flex: 1.5;
+      font-family: inherit;
+      font-size: calc(var(--font-ui) * 0.9);
+      font-weight: 700;
+      color: var(--teal);
+      border-color: var(--teal);
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .hud-btn:active { background: rgba(8,145,178,0.12); }
+
+    /* Buy-letter picker: 26 tiles, 6 per row, each showing its price where a board tile shows
+       its letter value. Tile size is derived from the card width so it scales like the board. */
+    .buyletter-overlay {
+      position: fixed; inset: 0;
+      background: rgba(26,32,44,0.55);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 30;
+    }
+    .buyletter-overlay.hidden { display: none; }
+    .buyletter-card {
+      --buy-tile: calc((var(--tile-size) * 5 + var(--gap) * 4 + 20px - 28px - var(--gap) * 5) / 6);
+      width: calc(var(--tile-size) * 5 + var(--gap) * 4 + 20px);
+      max-width: 94vw;
+      max-height: 94vh;
+      overflow-y: auto;
+      background: #fff;
+      border: 2px solid var(--teal);
+      border-radius: 14px;
+      padding: 18px 14px 14px;
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+    }
+    .buyletter-title { font-family: 'Fraunces', serif; font-size: calc(var(--font-btn) * 1.5); font-weight: 700; color: var(--teal); }
+    .buyletter-grid {
+      display: grid;
+      grid-template-columns: repeat(6, var(--buy-tile));
+      grid-auto-rows: var(--buy-tile);
+      gap: var(--gap);
+    }
+    .buy-tile {
+      width: var(--buy-tile); height: var(--buy-tile);
+      border-radius: 8px;
+      background: var(--tile-bg);
+      border: 2px solid var(--tile-border);
+      color: var(--text);
+      font-family: inherit;
+      font-size: calc(var(--font-tile) * 0.75);
+      font-weight: 500;
+      position: relative;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.10);
+    }
+    .buy-tile:active { background: rgba(8,145,178,0.12); border-color: var(--teal); }
+    .buy-tile .ltr { line-height: 1; transform: translateY(-8%); }
+    .buy-tile .pts {
+      position: absolute; right: 6%; bottom: 4%;
+      font-size: calc(var(--font-pts) * 0.9);
+      font-weight: 500; line-height: 1; color: var(--muted);
+      pointer-events: none;
+    }
+    .btn-buyletter-close { background: var(--teal); color: #fff; letter-spacing: 2px; width: 100%; }
+
+    /* Swap mode (a letter has been bought, waiting for the player to pick the tile to replace):
+       the prompt covers the Hint / Finish / Submit buttons, and everything except the tiles is
+       locked. */
+    .actions { position: relative; }
+    .swap-prompt {
+      position: absolute; inset: 0; z-index: 5;
+      background: var(--surface);
+      border: 2px solid var(--teal);
+      border-radius: 0;
+      display: flex; align-items: center; justify-content: center;
+      padding: 8px; text-align: center;
+      font-size: calc(var(--font-btn) * 1.15);
+      font-weight: 700; color: var(--teal);
+    }
+    .swap-prompt.hidden { display: none; }
+    body.swap-mode .btn-back, body.swap-mode .hud-btn { opacity: 0.45; pointer-events: none; }
+    body.swap-mode .tile { border-color: var(--teal); }
+
     /* Loading / error message */
     .status-msg { margin: 40px 20px; text-align: center; font-size: var(--font-btn); color: var(--muted); }
     .status-msg.error { color: var(--accent); }
@@ -448,6 +532,7 @@
   <div class="hud-box"><div class="hud-label">Score</div><div class="hud-value gold" id="score">0</div></div>
   <div class="hud-box"><div class="hud-label">Level</div><div class="hud-value" id="level">1</div></div>
   <div class="hud-box"><div class="hud-label">Best</div><div class="hud-value gold" id="highscore">0</div></div>
+  <button class="hud-box hud-btn" id="btn-buyletter" type="button">Buy Letter</button>
 </div>
 
 <div class="word-row">
@@ -473,6 +558,7 @@
   <button class="btn btn-hint" id="btn-hint" type="button">Hint</button>
   <button class="btn btn-finish" id="btn-finish">Finish game</button>
   <button class="btn btn-confirm" id="btn-confirm" disabled>Submit</button>
+  <div class="swap-prompt hidden" id="swap-prompt" role="status"></div>
 </div>
 
 <div class="gameover-overlay hidden" id="gameover" role="alertdialog" aria-modal="true"
@@ -535,6 +621,26 @@
   </div>
 </div>
 
+<div class="buyletter-overlay hidden" id="buyletter" role="dialog" aria-modal="true" aria-labelledby="buyletter-title">
+  <div class="buyletter-card">
+    <div class="buyletter-title" id="buyletter-title">Buy a letter</div>
+    <div class="buyletter-grid" id="buyletter-grid"></div>
+    <button class="btn btn-buyletter-close" id="btn-buyletter-close" type="button">Close</button>
+  </div>
+</div>
+
+<div class="hintconfirm-overlay hidden" id="buyconfirm" role="alertdialog" aria-modal="true"
+     aria-labelledby="buyconfirm-title" aria-describedby="buyconfirm-msg">
+  <div class="hintconfirm-card">
+    <div class="hintconfirm-title" id="buyconfirm-title">Buy a letter?</div>
+    <div class="hintconfirm-msg" id="buyconfirm-msg"></div>
+    <div class="hintconfirm-buttons">
+      <button class="btn btn-hintconfirm-no" id="btn-buyconfirm-no" type="button">No</button>
+      <button class="btn btn-hintconfirm-yes" id="btn-buyconfirm-yes" type="button">Yes</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -591,7 +697,6 @@
   function lengthRange(level) {
     let checkLevel = level;
     let wordsLeftAtLevel = WORDS_PER_LEVEL - ((state?.words ?? 0) % WORDS_PER_LEVEL);
-    // console.log('wordsLeftAtLevel = ' + wordsLeftAtLevel);
     if (wordsLeftAtLevel <= 2) {
       // Near the end of a level, start seeding with slightly longer words.
       checkLevel++;
@@ -638,14 +743,12 @@
   // seedDict must have been built with includeByLength=true (the default).
   function pickSeed(seedDict, level, rng = Math.random) {
     const { min, max } = lengthRange(level);
-    // console.log('min, max = ' + min + ' - ' + max);
     let total = 0;
     for (let n = min; n <= max; n++) total += (seedDict.byLength[n] || []).length;
     let k = Math.floor(rng() * total);
     for (let n = min; n <= max; n++) {
       const list = seedDict.byLength[n] || [];
       if (k < list.length) {
-        // console.log('Seed = ' + list[k]);
         return list[k];
       }
       k -= list.length;
@@ -945,6 +1048,12 @@
     return size;
   }
 
+  function aAn(letter) {
+    word = 'a';
+    if ("AEFHILMNORSUXY".includes(letter)) word = 'an';
+    return word;
+  }
+
   function render() {
     document.getElementById('score').textContent = state.score;
     document.getElementById('level').textContent = levelFor(state.words);
@@ -1007,6 +1116,12 @@
 
     const hintBtn = document.getElementById('btn-hint');
     hintBtn.textContent = state.hintWord ? ('Hint = ' + hintRevealText(state.hintWord)) : 'Hint';
+
+    // Swap mode (a letter has been bought): show the prompt over the bottom buttons.
+    const swapPromptEl = document.getElementById('swap-prompt');
+    swapPromptEl.classList.toggle('hidden', !swapLetter);
+    if (swapLetter) swapPromptEl.textContent = "Pick a tile that you want to swap for " + aAn(swapLetter) + " '" + swapLetter + "'";
+    document.body.classList.toggle('swap-mode', !!swapLetter);
   }
 
   // The portion of the hint word shown on the button and highlighted on the board: the first
@@ -1018,6 +1133,7 @@
   // ═══ Interactions ═══
   function onTileTap(i) {
     if (state.gameOver) return;
+    if (swapLetter) { swapTile(i); return; }   // buying a letter: this tap picks the tile to replace
     // Tiles can only be added by tapping them; a tile already in the word ignores the tap.
     // (Nothing changed, so there is nothing to save or redraw.)
     if (!selectTile(state, i)) return;
@@ -1084,10 +1200,11 @@
         });
       }
     });
+    computeLetterPrices('shuffle');   // after the animations are started, so it can't delay them
   }
 
   function onBackspaceTap() {
-    if (state.gameOver) return;
+    if (state.gameOver || swapLetter) return;
     if (state.selection.length === 0) {
       // Shuffle mode: nothing to backspace, so the button reshuffles the grid instead.
       performShuffle();
@@ -1099,7 +1216,7 @@
   }
 
   function onBackspaceHold() {
-    if (state.gameOver) return;
+    if (state.gameOver || swapLetter) return;
     if (state.selection.length === 0) {
       // Shuffle mode: a long press sorts the grid by tile value, then alphabetically.
       performSort();
@@ -1193,6 +1310,7 @@
 
     saveGameState();
     render();
+    computeLetterPrices('after submit');
     showToast(word + '  +' + points);
     // Shown last, so the board behind the dialog is already up to date and the level is saved.
     if (levelUp) showLevelUp(levelUp);
@@ -1235,6 +1353,7 @@
     document.getElementById('gameover').classList.add('hidden');
     saveGameState();
     render();
+    computeLetterPrices('new game');
   }
 
   // ═══ Game-over word list ═══
@@ -1340,6 +1459,212 @@
   function dismissLevelUp() {
     if (Date.now() - levelUpShownAt < LEVELUP_ARM_MS) return;
     document.getElementById('levelup').classList.add('hidden');
+  }
+
+  // ═══ Letter prices (timing experiment) ═══
+  // For each letter A-Z, counts how many words of at least the current minimum length can be
+  // made from the board when each of the 25 tiles in turn is replaced by that letter, counting
+  // only words that CONTAIN that letter, and turns that into a price. For now the results are only written to the console.
+  //
+  // Words are made from the board as a multiset (tile positions don't matter), the same rule as
+  // canMakeWord(). Two things keep it cheap:
+  //   - each word is pre-reduced to (letter, count) pairs once per dictionary + minimum length
+  //     and cached, so the per-board work is just a handful of array comparisons per word;
+  //   - replacing a tile only changes the board's letter counts, so tiles that hold the same
+  //     letter give identical results. Each DISTINCT board letter is tried once and weighted by
+  //     how many tiles hold it (a tile already holding the letter leaves the board unchanged).
+  const PRICE_DICT_NAME = 'seed';        // 'seed' (small list, like hints) or 'valid' (full list, much slower)
+  const MAX_LETTER_PRICE = 20;           // the letter that makes the most words costs this; the rest scale from it
+  let letterPrices = null;               // { A: {total, avg, price}, ... } for the current board
+  const priceReqCache = {};              // 'seed:5' -> array of Int8Array [letter, count, letter, count, ...]
+
+  function priceRequirements(dictName, dict, minLen) {
+    const key = dictName + ':' + minLen;
+    if (priceReqCache[key]) return priceReqCache[key];
+    const reqs = [];
+    for (const w of dict.set) {
+      if (w.length < minLen || w.length > CELLS) continue;
+      const counts = new Array(26).fill(0);
+      for (let i = 0; i < w.length; i++) counts[w.charCodeAt(i) - 65]++;
+      const pairs = [];
+      for (let l = 0; l < 26; l++) if (counts[l] > 0) pairs.push(l, counts[l]);
+      reqs.push(Int8Array.from(pairs));
+    }
+    priceReqCache[key] = reqs;
+    return reqs;
+  }
+
+  // Counts the words makeable from `counts` that contain the letter index `must`.
+  function countMakeable(reqs, counts, must) {
+    let n = 0;
+    outer:
+    for (let i = 0; i < reqs.length; i++) {
+      const r = reqs[i];
+      let hasMust = false;
+      for (let k = 0; k < r.length; k += 2) {
+        if (counts[r[k]] < r[k + 1]) continue outer;
+        if (r[k] === must) hasMust = true;
+      }
+      if (hasMust) n++;
+    }
+    return n;
+  }
+
+  function computeLetterPrices(reason) {
+    if (!state || !seedDict || !validDict) return;
+    const t0 = performance.now();
+    const minLen = minSubmitFor(levelFor(state.words));
+    const dict = PRICE_DICT_NAME === 'valid' ? validDict : seedDict;
+    const reqs = priceRequirements(PRICE_DICT_NAME, dict, minLen);
+    const t1 = performance.now();
+
+    const base = new Int8Array(26);
+    for (const ch of state.board) base[ch.charCodeAt(0) - 65]++;
+    const distinct = [];                                  // board letters present, with tile counts
+    for (let l = 0; l < 26; l++) if (base[l] > 0) distinct.push([l, base[l]]);
+
+    let evaluations = 0;
+    const prices = {};
+    const lines = [];
+    for (let L = 0; L < 26; L++) {
+      let total = 0;
+      for (const [X, mult] of distinct) {
+        let n;
+        if (X === L) {
+          n = countMakeable(reqs, base, L);               // board unchanged
+        } else {
+          base[X]--; base[L]++;
+          n = countMakeable(reqs, base, L);
+          base[X]++; base[L]--;
+        }
+        evaluations++;
+        total += n * mult;
+      }
+      const avg = total / CELLS;
+      prices[String.fromCharCode(65 + L)] = { total: total, avg: avg, price: 0 };
+    }
+    // Scale so the best letter costs MAX_LETTER_PRICE and every other letter is proportional to it
+    // (by average words made), rounded to whole points. If no letter makes any word, all are free.
+    let maxAvg = 0;
+    for (const letter in prices) if (prices[letter].avg > maxAvg) maxAvg = prices[letter].avg;
+    for (const letter in prices) {
+      const e = prices[letter];
+      e.price = maxAvg > 0 ? Math.round(e.avg / maxAvg * MAX_LETTER_PRICE) : 0;
+      lines.push(letter + ': ' + e.price + ' pts  (avg ' + e.avg.toFixed(1) + ' words, total ' + e.total + ')');
+    }
+    letterPrices = prices;
+    const t2 = performance.now();
+
+    /*
+    console.log('Letter prices [' + reason + '] min length ' + minLen + ', ' + PRICE_DICT_NAME +
+      ' dictionary, ' + reqs.length + ' candidate words\n' + lines.join('\n') + '\n' +
+      'Timing: ' + (t2 - t0).toFixed(1) + ' ms total (' + (t1 - t0).toFixed(1) + ' ms building word index, ' +
+      (t2 - t1).toFixed(1) + ' ms searching); ' + evaluations + ' board searches (naive would be ' + (26 * CELLS) + ')');
+    */
+  }
+
+  // ═══ Buy a letter ═══
+  // Buy Letter (HUD) -> picker of 26 priced tiles -> "Do you want to buy a 'D' for N points?"
+  //   No  -> back to the picker.
+  //   Yes -> swap mode: a prompt covers the bottom buttons and only the board tiles respond.
+  //          Tapping a tile replaces it with the bought letter and charges the price.
+  // The price is charged when the tile is picked, and swap mode is not saved, so reloading the
+  // page mid-swap simply cancels the purchase at no cost. Like hints, the score may go negative.
+  // Prices come from letterPrices, which is recalculated whenever the board changes.
+  const BUY_ARM_MS = 500;       // same stray-tap guard as the other dialogs
+  let swapLetter = null;        // bought letter waiting for a tile; null when not in swap mode
+  let swapPrice = 0;
+  let pendingBuyLetter = null;  // letter chosen in the picker, confirm dialog open
+  let buyLetterShownAt = 0;
+  let buyConfirmShownAt = 0;
+
+  function onBuyLetter() {
+    if (state.gameOver || swapLetter) return;
+    if (!letterPrices) computeLetterPrices('buy letter opened');
+    const grid = document.getElementById('buyletter-grid');
+    grid.innerHTML = '';
+    for (let L = 0; L < 26; L++) {
+      const letter = String.fromCharCode(65 + L);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'buy-tile';
+      const ltr = document.createElement('span');
+      ltr.className = 'ltr';
+      ltr.textContent = letter;
+      const pts = document.createElement('span');
+      pts.className = 'pts';
+      pts.textContent = letterPrices[letter].price;
+      btn.appendChild(ltr);
+      btn.appendChild(pts);
+      btn.addEventListener('click', function () { onBuyTileTap(letter); });
+      grid.appendChild(btn);
+    }
+    document.getElementById('buyletter').classList.remove('hidden');
+    document.getElementById('buyletter').firstElementChild.scrollTop = 0;
+    buyLetterShownAt = Date.now();
+  }
+
+  function closeBuyLetter() {
+    document.getElementById('buyletter').classList.add('hidden');
+  }
+
+  function onBuyTileTap(letter) {
+    if (Date.now() - buyLetterShownAt < BUY_ARM_MS) return;
+    pendingBuyLetter = letter;
+    points = 'points';
+    if (letterPrices[letter].price == 1) points = 'point';
+    document.getElementById('buyconfirm-msg').textContent =
+      "Do you want to buy " + aAn(letter) + " '" + letter + "'\nfor " + letterPrices[letter].price + " " + points + "?";
+    document.getElementById('buyconfirm').classList.remove('hidden');
+    buyConfirmShownAt = Date.now();
+  }
+
+  function cancelBuyConfirm() {
+    if (Date.now() - buyConfirmShownAt < BUY_ARM_MS) return;
+    document.getElementById('buyconfirm').classList.add('hidden');
+    pendingBuyLetter = null;            // the picker underneath is left open
+  }
+
+  function acceptBuyConfirm() {
+    if (Date.now() - buyConfirmShownAt < BUY_ARM_MS) return;
+    document.getElementById('buyconfirm').classList.add('hidden');
+    if (!pendingBuyLetter) return;
+    swapLetter = pendingBuyLetter;
+    swapPrice = letterPrices[swapLetter].price;
+    pendingBuyLetter = null;
+    closeBuyLetter();
+    render();                           // shows the prompt and locks everything but the tiles
+  }
+
+  // Replaces tile i with the bought letter. The word in progress is reset (its letters just
+  // changed under it); an active hint is kept and re-applied if its word can still be made from
+  // the new board, otherwise it is dropped.
+  function swapTile(i) {
+    const letter = swapLetter;
+    if (state.board[i] === letter) {
+      showToast('That tile is already ' + aAn(letter) + ' ' + letter);   // nothing charged; the player picks again
+      return;
+    }
+    state.board[i] = letter;
+    state.score -= swapPrice;
+    swapLetter = null;
+    state.selection = [];
+    if (state.hintWord) {
+      const counts = {};
+      for (const ch of state.board) counts[ch] = (counts[ch] || 0) + 1;
+      if (canMakeWord(state.hintWord, counts)) {
+        state.hintTiles = hintTiles(state.board, state.hintWord);
+        state.selection = state.hintTiles.slice();
+      } else {
+        state.hintWord = null;
+        state.hintTiles = null;
+      }
+    }
+    freshCells.add(i);
+    saveGameState();
+    render();
+    computeLetterPrices('after swap');
+    //showToast(letter + '  -' + swapPrice);
   }
 
   // ═══ Hint ═══
@@ -1506,6 +1831,11 @@
   fastTap(document.getElementById('btn-confirm'), onSubmit);
   fastTap(document.getElementById('btn-finish'), onFinish);
   fastTap(document.getElementById('btn-hint'), onHint);
+  fastTap(document.getElementById('btn-buyletter'), onBuyLetter);
+  // Plain click for the dialog buttons, as with the other dialogs.
+  document.getElementById('btn-buyletter-close').addEventListener('click', closeBuyLetter);
+  document.getElementById('btn-buyconfirm-yes').addEventListener('click', acceptBuyConfirm);
+  document.getElementById('btn-buyconfirm-no').addEventListener('click', cancelBuyConfirm);
   // Plain click, not fastTap, for the same reason as btn-levelup above.
   document.getElementById('btn-hintconfirm-yes').addEventListener('click', acceptHintConfirm);
   document.getElementById('btn-hintconfirm-no').addEventListener('click', cancelHintConfirm);
@@ -1574,7 +1904,7 @@
 
   Promise.all([
     loadWordList('getWordList', 'simple_words_10.txt'),
-    loadWordList('getFullWordList', 'CSW19.txt'),
+    loadWordList('getFullWordList', 'CSW24.txt'),
   ]).then(function (results) {
     seedDict = buildDictionary(results[0]);
     validDict = buildDictionary(results[1], false);   // no byLength needed for validation-only
@@ -1582,7 +1912,7 @@
     if (validDict.set.size < 1000) throw new Error('validation word list looks empty (' + validDict.set.size + ' words)');
 
     const saved = loadGameState();
-    if (saved) { state = saved; render(); }
+    if (saved) { state = saved; render(); computeLetterPrices('saved game loaded'); }
     else startNewGame();
   }).catch(function (e) {
     console.error(e);
