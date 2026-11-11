@@ -1637,25 +1637,31 @@
     render();                           // shows the prompt and locks everything but the tiles
   }
 
-  // Replaces tile i with the bought letter. The word in progress is reset (its letters just
-  // changed under it); an active hint is kept and re-applied if its word can still be made from
-  // the new board, otherwise it is dropped.
+  // Replaces tile i with the bought letter. The word in progress is left alone unless tile i is
+  // part of it (its letters would change under the player), in which case it is cleared. An
+  // active hint is kept if its word can still be made from the new board, otherwise it is
+  // dropped; if the hint was showing in a word that got cleared, it is re-selected.
   function swapTile(i) {
     const letter = swapLetter;
     if (state.board[i] === letter) {
       showToast('That tile is already ' + aAn(letter) + ' ' + letter);   // nothing charged; the player picks again
       return;
     }
+    const inWord = state.selection.includes(i);
+    const hintWasShowing = !!(state.hintTiles && state.hintTiles.length > 0 &&
+      state.hintTiles.every((t, k) => state.selection[k] === t));
     state.board[i] = letter;
     state.score -= swapPrice;
     swapLetter = null;
-    state.selection = [];
+    if (inWord) state.selection = [];
     if (state.hintWord) {
       const counts = {};
       for (const ch of state.board) counts[ch] = (counts[ch] || 0) + 1;
       if (canMakeWord(state.hintWord, counts)) {
-        state.hintTiles = hintTiles(state.board, state.hintWord);
-        state.selection = state.hintTiles.slice();
+        if (!state.hintTiles || state.hintTiles.includes(i)) {
+          state.hintTiles = hintTiles(state.board, state.hintWord);   // its tiles moved
+        }
+        if (inWord && hintWasShowing) state.selection = state.hintTiles.slice();
       } else {
         state.hintWord = null;
         state.hintTiles = null;
@@ -1730,6 +1736,8 @@
       return;
     }
     pendingHintWord = word;
+    // console.log('pendingHintWord = '+pendingHintWord);
+
     // When a hint is already showing, the prompt starts with a line naming it IN FULL -- the one
     // moment the game actually displays a hint word. From then on that word can't be submitted
     // this go (until a submit succeeds), whether or not the player buys another hint.
