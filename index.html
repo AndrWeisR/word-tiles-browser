@@ -97,6 +97,7 @@
       justify-content: center;
       overflow: hidden;
       transition: border-color 0.15s, background 0.15s;
+      cursor: pointer;
     }
     .word-wrap.building { border-color: var(--accent); background: rgba(229,62,62,0.06); }
     .word-wrap.valid    { border-color: var(--green);  background: rgba(56,161,105,0.10); }
@@ -537,7 +538,7 @@
 </div>
 
 <div class="word-row">
-  <div class="word-wrap" id="word-wrap"><div class="word-text" id="word-text"></div></div>
+  <div class="word-wrap" id="word-wrap" role="button" tabindex="0" aria-label="Toggle played letter position"><div class="word-text" id="word-text"></div></div>
   <button class="btn-back shuffle-mode" id="btn-back" type="button" aria-disabled="false"
           aria-label="Shuffle the grid. Tap to shuffle, press and hold to sort by value then alphabetically.">
     <svg class="icon-backspace" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"
@@ -831,12 +832,35 @@
 
   // ── New game ─────────────────────────────────────────────────────────────────
   function newState(seedDict, rng = Math.random) {
-    const state = { board: new Array(CELLS).fill(null), bank: [], score: 0, words: 0, selection: [] };
+    const state = {
+      board: new Array(CELLS).fill(null),
+      bank: [],
+      score: 0,
+      words: 0,
+      selection: [],
+      wordPrefix: [],
+      wordSuffix: [],
+      wordHistory: []
+    };
     fillEmptyCells(state, drawLetters(state, CELLS, seedDict, 1, rng), rng);
     return state;
   }
 
   // ── Selection helpers ────────────────────────────────────────────────────────
+  function initWordParts(state) {
+    if (!state.wordPrefix) state.wordPrefix = [];
+    if (!state.wordSuffix) state.wordSuffix = [];
+    if (!state.wordHistory) state.wordHistory = [];
+    if (state.selection.length === 0 && (state.wordPrefix.length > 0 || state.wordSuffix.length > 0)) {
+      state.wordPrefix = [];
+      state.wordSuffix = [];
+      state.wordHistory = [];
+    } else if (state.selection.length > 0 && state.wordPrefix.length === 0 && state.wordSuffix.length === 0) {
+      state.wordPrefix = state.selection.slice();
+      state.wordHistory = state.wordPrefix.map(() => 'prefix');
+    }
+  }
+
   function selectedWord(state) {
     return state.selection.map(i => state.board[i]).join('');
   }
@@ -853,14 +877,42 @@
   function selectTile(state, index) {
     if (!Number.isInteger(index) || index < 0 || index >= CELLS) return false;
     if (state.selection.includes(index)) return false;
-    state.selection.push(index);
+    initWordParts(state);
+    const minLen = minSubmitFor(levelFor(state.words));
+    const currentLen = state.wordPrefix.length + state.wordSuffix.length;
+    const blanksNeeded = Math.max(0, minLen - currentLen);
+
+    if (blanksNeeded > 0) {
+      state.wordPrefix.push(index);
+      state.wordHistory.push('prefix');
+    } else {
+      if (state.wordSuffix.length > 0) {
+        state.wordSuffix.push(index);
+        state.wordHistory.push('suffix');
+      } else {
+        state.wordPrefix.push(index);
+        state.wordHistory.push('prefix');
+      }
+    }
+    state.selection = state.wordPrefix.concat(state.wordSuffix);
     return true;
   }
 
   // Removes the last letter (deselecting its tile). Returns true if the selection changed.
   function backspace(state) {
     if (state.selection.length === 0) return false;
-    state.selection.pop();
+    initWordParts(state);
+    const lastTarget = state.wordHistory.pop();
+    if (lastTarget === 'prefix' && state.wordPrefix.length > 0) {
+      state.wordPrefix.pop();
+    } else if (lastTarget === 'suffix' && state.wordSuffix.length > 0) {
+      state.wordSuffix.pop();
+    } else if (state.wordPrefix.length > 0) {
+      state.wordPrefix.pop();
+    } else if (state.wordSuffix.length > 0) {
+      state.wordSuffix.pop();
+    }
+    state.selection = state.wordPrefix.concat(state.wordSuffix);
     return true;
   }
 
@@ -868,6 +920,33 @@
   function clearSelection(state) {
     if (state.selection.length === 0) return false;
     state.selection = [];
+    state.wordPrefix = [];
+    state.wordSuffix = [];
+    state.wordHistory = [];
+    return true;
+  }
+
+  // Toggles which end the played letters appear in the word row (e.g. "ING___" <-> "___ING")
+  function toggleWordAlignment(state) {
+    initWordParts(state);
+    if (state.selection.length === 0) return false;
+    const minLen = minSubmitFor(levelFor(state.words));
+    if (state.selection.length >= minLen) return false;
+
+    if (state.wordSuffix.length > 0 && state.wordPrefix.length === 0) {
+      state.wordPrefix = state.wordSuffix.slice();
+      state.wordSuffix = [];
+      state.wordHistory = state.wordPrefix.map(() => 'prefix');
+    } else if (state.wordPrefix.length > 0 && state.wordSuffix.length === 0) {
+      state.wordSuffix = state.wordPrefix.slice();
+      state.wordPrefix = [];
+      state.wordHistory = state.wordSuffix.map(() => 'suffix');
+    } else {
+      state.wordPrefix = state.wordPrefix.concat(state.wordSuffix);
+      state.wordSuffix = [];
+      state.wordHistory = state.wordPrefix.map(() => 'prefix');
+    }
+    state.selection = state.wordPrefix.concat(state.wordSuffix);
     return true;
   }
 
@@ -881,6 +960,9 @@
     const points = wordValue(selectedWord(state));
     for (const i of state.selection) state.board[i] = null;
     state.selection = [];
+    state.wordPrefix = [];
+    state.wordSuffix = [];
+    state.wordHistory = [];
     state.score += points;
     state.words += 1;
     // The level is taken from the word count *after* this word, so the new seed for the
@@ -1019,6 +1101,14 @@
         if (s.hintTiles === undefined) s.hintTiles = null;
         if (s.shownHints === undefined) s.shownHints = [];
         if (s.wordLog === undefined) s.wordLog = [];
+        if (!Array.isArray(s.wordPrefix) || !Array.isArray(s.wordSuffix)) {
+          s.wordPrefix = s.selection.slice();
+          s.wordSuffix = [];
+          s.wordHistory = s.wordPrefix.map(() => 'prefix');
+        }
+        if (!Array.isArray(s.wordHistory)) {
+          s.wordHistory = s.wordPrefix.map(() => 'prefix').concat(s.wordSuffix.map(() => 'suffix'));
+        }
         return s;
       }
     } catch (e) { console.error(e); }
@@ -1056,6 +1146,7 @@
   }
 
   function render() {
+    initWordParts(state);
     document.getElementById('score').textContent = state.score;
     document.getElementById('level').textContent = levelFor(state.words);
     document.getElementById('highscore').textContent = getBest();
@@ -1071,9 +1162,12 @@
     if (hasSel) {
       text.className = 'word-text';
       const minLen = minSubmitFor(levelFor(state.words));
-      const word = selectedWord(state);
-      const blanksNeeded = Math.max(0, minLen - word.length);
-      const display = blanksNeeded > 0 ? word + Array(blanksNeeded).fill('_').join('') : word; // .join(' ')
+      const prefixStr = state.wordPrefix.map(i => state.board[i]).join('');
+      const suffixStr = state.wordSuffix.map(i => state.board[i]).join('');
+      const currentLen = prefixStr.length + suffixStr.length;
+      const blanksNeeded = Math.max(0, minLen - currentLen);
+      const blanks = blanksNeeded > 0 ? Array(blanksNeeded).fill('_').join('') : '';
+      const display = prefixStr + blanks + suffixStr;
       fitInto(text, wrap, display, wordFontBase);
     } else {
       text.className = 'word-text word-placeholder';
@@ -1132,6 +1226,13 @@
   }
 
   // ═══ Interactions ═══
+  function onWordTextTap() {
+    if (state.gameOver || swapLetter) return;
+    if (!toggleWordAlignment(state)) return;
+    saveGameState();
+    render();
+  }
+
   function onTileTap(i) {
     if (state.gameOver) return;
     if (swapLetter) { swapTile(i); return; }   // buying a letter: this tap picks the tile to replace
@@ -1653,7 +1754,12 @@
     state.board[i] = letter;
     state.score -= swapPrice;
     swapLetter = null;
-    if (inWord) state.selection = [];
+    if (inWord) {
+      state.selection = [];
+      state.wordPrefix = [];
+      state.wordSuffix = [];
+      state.wordHistory = [];
+    }
     if (state.hintWord) {
       const counts = {};
       for (const ch of state.board) counts[ch] = (counts[ch] || 0) + 1;
@@ -1661,7 +1767,12 @@
         if (!state.hintTiles || state.hintTiles.includes(i)) {
           state.hintTiles = hintTiles(state.board, state.hintWord);   // its tiles moved
         }
-        if (inWord && hintWasShowing) state.selection = state.hintTiles.slice();
+        if (inWord && hintWasShowing) {
+          state.selection = state.hintTiles.slice();
+          state.wordPrefix = state.selection.slice();
+          state.wordSuffix = [];
+          state.wordHistory = state.wordPrefix.map(() => 'prefix');
+        }
       } else {
         state.hintWord = null;
         state.hintTiles = null;
@@ -1772,7 +1883,12 @@
       // is no hint trace to remove, and wiping their work would be a surprise.
       const hintStillShowing = state.hintTiles && state.hintTiles.length > 0 &&
         state.hintTiles.every((t, i) => state.selection[i] === t);
-      if (hintStillShowing) state.selection = [];
+      if (hintStillShowing) {
+        state.selection = [];
+        state.wordPrefix = [];
+        state.wordSuffix = [];
+        state.wordHistory = [];
+      }
       state.hintWord = null;
       state.hintTiles = null;
       saveGameState();
@@ -1793,6 +1909,9 @@
     // the game later names it in full (see onHint).
     state.hintTiles = hintTiles(state.board, pendingHintWord);
     state.selection = state.hintTiles.slice();
+    state.wordPrefix = state.selection.slice();
+    state.wordSuffix = [];
+    state.wordHistory = state.wordPrefix.map(() => 'prefix');
     pendingHintWord = null;
 
     saveGameState();
@@ -1837,6 +1956,14 @@
   }
 
   setupBackspace(document.getElementById('btn-back'));
+  const wordWrapEl = document.getElementById('word-wrap');
+  fastTap(wordWrapEl, onWordTextTap);
+  wordWrapEl.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onWordTextTap();
+    }
+  });
   fastTap(document.getElementById('btn-confirm'), onSubmit);
   fastTap(document.getElementById('btn-finish'), onFinish);
   fastTap(document.getElementById('btn-hint'), onHint);
