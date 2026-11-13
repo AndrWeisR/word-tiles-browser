@@ -41,17 +41,17 @@
       flex-direction: column;
       align-items: center;
       min-height: 100vh;
-      padding: 8px 4px 12px;
+      padding: clamp(4px, 1vh, 8px) 4px clamp(6px, 1.5vh, 12px);
       user-select: none;
     }
 
     h1 {
       font-family: 'Fraunces', serif;
-      font-size: 2rem;
+      font-size: clamp(1.6rem, 4vh, 2rem);
       font-weight: 700;
       letter-spacing: -1px;
       color: var(--text);
-      margin-bottom: 12px;
+      margin-bottom: clamp(6px, 1.5vh, 12px);
     }
     h1 span { color: var(--accent); }
 
@@ -191,7 +191,7 @@
       grid-template-columns: 1fr 1fr;
       grid-template-rows: auto auto;
       gap: var(--gap);
-      margin-bottom: 8px;
+      margin-bottom: 4px;
     }
 
     .actions button {
@@ -1991,25 +1991,40 @@
     const vw = window.innerWidth, vh = window.innerHeight;
     const gap = Math.max(MAX_HINT_LENGTH, Math.min(12, Math.round(vw * 0.012)));
 
-    // Fixed vertical furniture, in units of tileSize: title + HUD + word bar + action row +
-    // finish button + paddings. Solve for the largest tile that fits BOTH the width and the
-    // height, so the grid grows to fill a tablet but never overflows a small phone.
+    // Fixed vertical furniture: title + HUD + word bar + action row + paddings/margins.
+    // Solve for the largest tile that fits BOTH the width and the height, so the grid
+    // grows to fill a tablet/desktop but never overflows vertically or horizontally.
     const widthLimit  = Math.floor((vw * 0.94 - 20 - gap * 4) / 5);
-    const heightLimit = Math.floor((vh - 20 - gap * 4 - 32) / (5 + 3.6));   // 5 tile rows + ~3.6 rows of furniture
-    const tileSize = Math.max(52, Math.min(150, widthLimit, heightLimit));
+    const heightLimit = Math.floor((vh - 175 - gap * 5) / 7.6);
+    let tileSize = Math.max(40, Math.min(150, widthLimit, heightLimit));
 
-    const root = document.documentElement;
-    root.style.setProperty('--tile-size', tileSize + 'px');
-    root.style.setProperty('--gap', gap + 'px');
-    root.style.setProperty('--font-tile', Math.max(24, Math.round(tileSize * 0.53)) + 'px');
-    root.style.setProperty('--font-ui', Math.max(14, Math.round(tileSize * 0.24)) + 'px');
-    root.style.setProperty('--font-btn', Math.max(18, Math.round(tileSize * 0.26)) + 'px');
-    root.style.setProperty('--btn-pad', Math.max(14, Math.round(tileSize * 0.2)) + 'px ' + Math.max(20, Math.round(tileSize * 0.28)) + 'px');
-    root.style.setProperty('--font-label', Math.max(11, Math.round(tileSize * 0.15)) + 'px');
-    wordFontBase = Math.max(26, Math.round(tileSize * 0.46));
-    root.style.setProperty('--font-word', wordFontBase + 'px');
-    root.style.setProperty('--font-pts', Math.max(11, Math.round(tileSize * 0.22)) + 'px');
-    root.style.setProperty('--word-height', Math.max(56, Math.round(tileSize * 0.9)) + 'px');
+    function setRootVars(size) {
+      const root = document.documentElement;
+      root.style.setProperty('--tile-size', size + 'px');
+      root.style.setProperty('--gap', gap + 'px');
+      root.style.setProperty('--font-tile', Math.max(20, Math.round(size * 0.53)) + 'px');
+      root.style.setProperty('--font-ui', Math.max(13, Math.round(size * 0.24)) + 'px');
+      root.style.setProperty('--font-btn', Math.max(15, Math.round(size * 0.26)) + 'px');
+      root.style.setProperty('--btn-pad', Math.max(10, Math.round(size * 0.18)) + 'px ' + Math.max(16, Math.round(size * 0.26)) + 'px');
+      root.style.setProperty('--font-label', Math.max(10, Math.round(size * 0.15)) + 'px');
+      wordFontBase = Math.max(22, Math.round(size * 0.46));
+      root.style.setProperty('--font-word', wordFontBase + 'px');
+      root.style.setProperty('--font-pts', Math.max(10, Math.round(size * 0.22)) + 'px');
+      root.style.setProperty('--word-height', Math.max(46, Math.round(size * 0.88)) + 'px');
+    }
+
+    setRootVars(tileSize);
+
+    // If the action buttons still extend past the viewport bottom, decrement tileSize until it fits
+    const act = document.querySelector('.actions');
+    if (act) {
+      let rect = act.getBoundingClientRect();
+      while (tileSize > 36 && rect.bottom > vh - 4) {
+        tileSize--;
+        setRootVars(tileSize);
+        rect = act.getBoundingClientRect();
+      }
+    }
   }
 
   // ═══ Boot ═══
